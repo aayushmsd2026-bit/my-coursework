@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Coursework</title>
+<meta name="theme-color" content="#F5F5F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1420" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Coursework">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F3A5F'/%3E%3Crect width='64' height='6' fill='%23C8102E'/%3E%3Cpath d='M19 33l9 9 17-18' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="nav">
+    <div class="brand"><span class="dot"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>My Coursework</div>
+    <nav class="navlist" id="navlist" aria-label="Main"></nav>
+    <div class="foot">
+      <div class="acct" id="acct"></div>
+      <span class="st" id="syncst">Saved on this device</span>
+      <span id="hubdate">Connecting to the hub…</span>
+    </div>
+  </aside>
+  <main>
+    <div class="top">
+      <div><h1 id="headline">Your coursework</h1><p class="sub" id="subline"></p></div>
+      <div class="topacts">
+        <button class="icon big" type="button" data-settings aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+        <button class="btn primary" type="button" data-add><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add assignment</button>
+      </div>
+    </div>
+    <div id="banner"></div>
+    <div id="view" class="view"></div>
+  </main>
+</div>
+
+<nav class="tabbar" id="tabbar" aria-label="Main"></nav>
+<div class="scrim" id="scrim"></div>
+
+<!-- Item details -->
+<aside class="sheet" id="sheet" aria-hidden="true" role="dialog" aria-labelledby="sheetlabel">
+  <div class="sh"><span class="label" id="sheetlabel">Assignment</span><button class="icon" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <form class="scroll" id="form" autocomplete="off">
+    <div id="sheetview" class="stack"></div>
+    <div class="field"><label for="f-note">My notes</label><textarea id="f-note" rows="3" placeholder="Drafts, word count, what's left to do…"></textarea><span class="hint">Private. Never included in emails.</span></div>
+    <details class="edit" id="editbox">
+      <summary><span>Edit details<small id="edithint">Changes only show for you</small></span></summary>
+      <div class="in">
+        <div class="field" id="f-subj-wrap"><label for="f-subj">Subject</label><select id="f-subj"></select></div>
+        <div class="field"><label for="f-title">Title</label><textarea id="f-title" rows="3"></textarea></div>
+        <div class="row2">
+          <div class="field"><label for="f-due">Due date</label><input id="f-due" type="date"></div>
+          <div class="field"><label for="f-time">Time</label><input id="f-time" type="time"><span class="hint">Empty means end of day</span></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label for="f-mod">Module</label><select id="f-mod"></select></div>
+          <div class="field" id="f-kind-wrap"><label for="f-kind">Type</label><select id="f-kind"><option value="assignment">Assignment</option><option value="reading">Reading</option></select></div>
+        </div>
+        <div class="field"><label for="f-link">Assignment link</label><input id="f-link" type="url" placeholder="https://"></div>
+        <div class="field"><label for="f-email">Submit by email to</label><input id="f-email" type="email" placeholder="teacher@kusoed.edu.np"></div>
+        <div class="orig" id="orig" hidden></div>
+      </div>
+    </details>
+  </form>
+  <div class="sf">
+    <div><button class="btn ghost danger" type="button" id="f-hide">Hide</button></div>
+    <div><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="submit" form="form" id="f-save">Save</button></div>
+  </div>
+</aside>
+
+<!-- Email composer -->
+<aside class="sheet wide" id="composer" aria-hidden="true" role="dialog" aria-labelledby="c-label">
+  <div class="sh"><span class="label" id="c-label">Email your submission</span><button class="icon" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <form class="scroll" id="cform" autocomplete="off">
+    <div id="c-warn"></div>
+    <div class="row2">
+      <div class="field"><label for="c-tname">Teacher's name</label><input id="c-tname" type="text" placeholder="e.g. Dr. Sharma"><span class="hint">Saved for this subject</span></div>
+      <div class="field"><label for="c-to">To</label><input id="c-to" type="email" required placeholder="teacher@kusoed.edu.np"></div>
+    </div>
+    <div class="field"><label for="c-cc">Cc <span class="opt">optional</span></label><input id="c-cc" type="text" placeholder="Separate addresses with commas"></div>
+    <div class="field"><label for="c-subject">Subject</label><input id="c-subject" type="text"></div>
+    <div class="seg2" role="tablist"><button type="button" class="on" data-ctab="preview" role="tab">Preview</button><button type="button" data-ctab="edit" role="tab">Edit text</button></div>
+    <div class="mailpreview" id="c-preview"></div>
+    <div class="field" id="c-editwrap" hidden><label for="c-body">Message</label><textarea id="c-body" rows="18"></textarea><button type="button" class="btn ghost" id="c-regen" style="align-self:flex-start">Reset to the template</button></div>
+    <label class="checkrow"><input type="checkbox" id="c-markdone" checked><span>Mark the assignment as done after sending</span></label>
+  </form>
+  <div class="sf">
+    <div><button class="btn ghost" type="button" id="c-copy">Copy text</button><a class="btn ghost" id="c-gmail" href="#" target="_blank" rel="noopener">Open in Gmail</a></div>
+    <div><button class="btn primary" type="button" id="c-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg>Send from my Gmail</button></div>
+  </div>
+</aside>
+
+<!-- Settings -->
+<aside class="sheet wide" id="settings" aria-hidden="true" role="dialog" aria-labelledby="s-label">
+  <div class="sh"><span class="label" id="s-label">Settings</span><button class="icon" type="button" data-close aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <form class="scroll" id="sform" autocomplete="off">
+    <section class="setgroup" id="s-account"></section>
+    <section class="setgroup">
+      <h3>Your details</h3><p class="hint">Used to sign your submission emails.</p>
+      <div class="row2">
+        <div class="field"><label for="p-name">Full name</label><input id="p-name" type="text" autocomplete="name"></div>
+        <div class="field"><label for="p-id">Student ID / roll no. <span class="opt">optional</span></label><input id="p-id" type="text"></div>
+      </div>
+      <div class="field"><label for="p-program">Programme</label><input id="p-program" type="text" placeholder="e.g. MPhil in Sustainable Development"></div>
+      <div class="field"><label for="p-inst">Institution</label><input id="p-inst" type="text" placeholder="Kathmandu University School of Education"></div>
+      <div class="field"><label for="p-phone">Phone <span class="opt">optional</span></label><input id="p-phone" type="tel"></div>
+    </section>
+    <section class="setgroup"><h3>Teachers</h3><p class="hint">Filled in for you when you email a submission.</p><div id="s-teachers" class="stack"></div></section>
+    <section class="setgroup" id="s-hub"></section>
+    <section class="setgroup">
+      <h3>Your data</h3><p class="hint">Move data in from the Claude version, or keep a backup.</p>
+      <div class="field"><label for="s-import">Paste data to import</label><textarea id="s-import" rows="4" placeholder='{"done":{…},"work":{…}}'></textarea></div>
+      <div class="btnrow"><button type="button" class="btn" id="s-doimport">Import and merge</button><button type="button" class="btn ghost" id="s-export">Copy my data</button></div>
+    </section>
+  </form>
+  <div class="sf"><div></div><div><button class="btn" type="button" data-close>Close</button><button class="btn primary" type="submit" form="sform">Save</button></div></div>
+</aside>
+
+<div class="toast" id="toast" role="status"><span id="toastmsg"></span><button type="button" id="toastbtn">Undo</button></div>
+
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
