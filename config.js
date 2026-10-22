@@ -1,14 +1,15 @@
 // ===== Your settings. Edit this file once, then commit & push. =====
 window.COURSEWORK_CONFIG = {
-  // Firebase → Project settings → General → Your apps → Web app → "firebaseConfig".
+  // Firebase → Project settings → Your apps → Web app → "firebaseConfig".
   // These values are safe to publish; your Firestore rules are what protect your data.
   firebase: {
-    apiKey: "PASTE_YOUR_API_KEY",
-    authDomain: "your-project.firebaseapp.com",
-    projectId: "your-project",
-    storageBucket: "your-project.appspot.com",
-    messagingSenderId: "000000000000",
-    appId: "1:000000000000:web:0000000000000000"
+    apiKey: "AIzaSyAG•••••••••••••••••••••••••••••••",
+    authDomain: "my-coursework-64c90.firebaseapp.com",
+    projectId: "my-coursework-64c90",
+    storageBucket: "my-coursework-64c90.firebasestorage.app",
+    messagingSenderId: "584725250689",
+    appId: "1:584725250689:web:2b2167534469e216958380",
+    measurementId: "G-3D3EKHFT7Y"
   },
 
   // Where your friend's hub keeps its data. Tried in order; the first that works is used.
