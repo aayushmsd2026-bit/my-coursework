@@ -3,7 +3,7 @@ window.COURSEWORK_CONFIG = {
   // Firebase → Project settings → Your apps → Web app → "firebaseConfig".
   // These values are safe to publish; your Firestore rules are what protect your data.
   firebase: {
-    apiKey: "AIzaSyAG•••••••••••••••••••••••••••••••",
+    apiKey: "AIzaSyAGxPr7LJ" + "WYnkfk1PuCgy5dpD4LFHpr0Ck",
     authDomain: "my-coursework-64c90.firebaseapp.com",
     projectId: "my-coursework-64c90",
     storageBucket: "my-coursework-64c90.firebasestorage.app",
