@@ -26,6 +26,7 @@ const ICON = {
   pin: svg('<path d="M12 17v4M8 3h8l-1 6 3 4H6l3-4z"/>'),
   copy: svg('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'),
   doc: svg('<path d="M6 3h8l4 4v14H6zM14 3v4h4"/>', 1.8),
+  cal: svg('<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
   dots: svg('<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>', 2.4),
   clip: svg('<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>'),
   play: svg('<rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>'),
@@ -89,11 +90,9 @@ const subjOf = id => SUBJ.find(s => s.id === id) || { id, code: "", short: "Remo
 /* =========================================================================
    2. YOURS — your layer, keyed by item id
    ========================================================================= */
-const EMPTY = () => ({ v: 2, done: {}, edits: {}, custom: [], hidden: {}, star: {}, seen: [], flags: {}, work: {}, sent: {}, snap: {}, colors: {}, profile: {}, teachers: {}, reminders: {}, account: {} });
-// Reminder defaults; the daily job (scripts/remind.mjs) uses the same ones.
-const REMINDER_DEFAULTS = { enabled: true, days: 3, overdue: true, readings: false };
-const MAPS = ["done", "edits", "hidden", "star", "work", "sent"];
-const load = o => { const s = { ...EMPTY(), ...(o || {}) }; for (const k of Object.keys(EMPTY())) if (s[k] == null) s[k] = EMPTY()[k]; delete s.flags.importDismissed; return s; };
+const EMPTY = () => ({ v: 2, done: {}, edits: {}, custom: [], hidden: {}, star: {}, seen: [], flags: {}, work: {}, sent: {}, snap: {}, colors: {}, profile: {}, teachers: {}, steps: {}, prog: {}, grades: {} });
+const MAPS = ["done", "edits", "hidden", "star", "work", "sent", "steps", "prog", "grades"];
+const load = o => { const s = { ...EMPTY(), ...(o || {}) }; for (const k of Object.keys(EMPTY())) if (s[k] == null) s[k] = EMPTY()[k]; delete s.flags.importDismissed; delete s.reminders; delete s.account; return s; };
 const LOCAL = "mc-state";
 let S = EMPTY();
 try { S = load(JSON.parse(localStorage.getItem(LOCAL))); } catch (e) {}
@@ -159,11 +158,18 @@ function items() {
   }
   S.custom.forEach(c => out.push({ ...c, custom: true, conflicts: [] }));
   return out.map(it => ({
-    ...it, work: S.work[it.id] || [], sent: S.sent[it.id] || [],
+    ...it, work: S.work[it.id] || [], sent: S.sent[it.id] || [], steps: S.steps[it.id] || [], grade: S.grades[it.id] || null,
+    inProgress: !!S.prog[it.id] && !S.done[it.id], words: wordTarget(it.title),
     done: !!S.done[it.id], hidden: it.id in S.hidden ? !!S.hidden[it.id] : isPlaceholder(it), star: !!S.star[it.id],
     isNew: !it.custom && !it.removed && S.seen.length > 0 && !S.seen.includes(it.id),
   }));
 }
+// "Write a 600-800 words reflection" → "600–800 words"
+function wordTarget(t) {
+  const m = /(\d{3,5})\s*(?:-|–|—|to)\s*(\d{3,5})\s*words?/i.exec(t || "") || /(\d{3,5})\s*words?\b/i.exec(t || "");
+  return !m ? "" : m[2] ? `${m[1]}–${m[2]} words` : `${m[1]} words`;
+}
+const gradePct = g => g && g.score !== "" && g.outOf ? Math.round(Number(g.score) / Number(g.outOf) * 100) : null;
 // Your friend's placeholder entries ("…please ignore") start hidden; you can unhide them.
 const isPlaceholder = a => /please ignore|this is a test/i.test(a.base ? a.base.title : a.title);
 const tasks = all => all.filter(a => a.kind === "assignment" || (a.kind === "reading" && a.due));
@@ -244,7 +250,6 @@ function onUser(u) {
       cloudRef = ref;
       S = cloud ? (localDirty ? mergeState(load(cloud), S) : load(cloud)) : S;
       if (!S.profile.name && u.displayName) S.profile.name = u.displayName;
-      S.account = { email: u.email || "", name: u.displayName || "" }; // lets the reminder job know where to write
       lastWritten = cloud ? JSON.stringify(cloud) : "";
       localDirty = false;
       if (HUB) { buildFromHub(HUB); reconcile(); }
@@ -322,6 +327,7 @@ async function gmailSend(token, m) {
    5. DATES & HELPERS
    ========================================================================= */
 const pad = n => String(n).padStart(2, "0");
+function isoDay(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 const parseD = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const dueAt = a => { if (!a.due) return null; const d = parseD(a.due); if (a.time) { const [h, m] = a.time.split(":").map(Number); d.setHours(h, m); } else d.setHours(23, 59); return d; };
 const sod = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
@@ -364,6 +370,7 @@ const normURL = u => { u = u.trim(); if (!u) return ""; if (!/^[a-z][a-z0-9+.-]*
    6. RENDERING
    ========================================================================= */
 let view = "todo", filter = "all", query = "", openSubj = null, subTab = "assignments", openMod = 0, showHidden = false;
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1), calSel = isoDay(new Date());
 try { const v = JSON.parse(sessionStorage.getItem("mc-ui") || "{}"); view = v.view || view; filter = v.filter || filter; openSubj = v.openSubj || null; subTab = v.subTab || subTab; } catch (e) {}
 const saveUI = () => { try { sessionStorage.setItem("mc-ui", JSON.stringify({ view, filter, openSubj, subTab })); } catch (e) {} };
 const matches = a => !query || (a.title + " " + subjOf(a.sid).name + " " + (a.note || "") + " " + (a.work || []).map(w => w.label + " " + w.url).join(" ")).toLowerCase().includes(query);
@@ -374,6 +381,10 @@ function itemHTML(a) {
   const s = subjOf(a.sid), u = urgency(a);
   const tags = [
     a.star ? `<span class="tag pin">Pinned</span>` : "",
+    a.inProgress ? `<span class="tag prog">In progress</span>` : "",
+    a.steps.length ? `<span class="tag steps"><i style="--p:${Math.round(a.steps.filter(x => x.done).length / a.steps.length * 100)}%"></i>${a.steps.filter(x => x.done).length}/${a.steps.length} steps</span>` : "",
+    a.words && a.kind === "assignment" ? `<span class="tag">${esc(a.words)}</span>` : "",
+    gradePct(a.grade) != null ? `<span class="tag grade">${esc(a.grade.score)}/${esc(a.grade.outOf)}</span>` : "",
     a.isNew ? `<span class="tag new">New</span>` : "",
     a.conflicts.length ? `<span class="tag conflict">Hub updated</span>` : "",
     a.removed ? `<span class="tag gone">Removed from hub</span>` : "",
@@ -472,10 +483,11 @@ function renderSubject(all) {
     body = group("To do", L.filter(a => !a.done).sort(byDue)) + group("Done", L.filter(a => a.done).sort(byDue)) || `<div class="empty"><b>Nothing here</b></div>`;
   } else body = `<div class="card res">${cur.filter(inMod).map(resRow).join("")}</div>`;
   const doneT = T.filter(a => a.done).length;
+  const pcts = T.map(a => gradePct(a.grade)).filter(v => v != null), avg = pcts.length ? Math.round(pcts.reduce((x, y) => x + y, 0) / pcts.length) : null;
   return `<div class="subhead" style="--c:${s.color}">
       <button class="btn ghost back" type="button" data-go="subjects">← All subjects</button>
       ${s.code ? `<span class="code">${esc(s.code)}</span>` : ""}<h2>${esc(s.short)}</h2>
-      <div style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--mute)"><div class="pbar" style="flex:0 1 260px;margin:0"><i style="width:${T.length ? doneT / T.length * 100 : 0}%;background:${s.color}"></i></div>${doneT} of ${T.length} assignments done</div>
+      <div style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--mute)"><div class="pbar" style="flex:0 1 260px;margin:0"><i style="width:${T.length ? doneT / T.length * 100 : 0}%;background:${s.color}"></i></div>${doneT} of ${T.length} assignments done${avg != null ? ` · average mark <b style="color:var(--head)">${avg}%</b> (${pcts.length} graded)` : ""}</div>
     </div>
     <div class="tabs" style="--c:${s.color}" role="tablist">${tab("assignments", "Assignments", T, `${doneT}/${T.length}`)}${tab("readings", "Readings", R, `${R.filter(a => a.done).length}/${R.length}`)}${tab("notes", "Lecture notes", N, N.length)}</div>
     ${mods.length > 1 ? `<div class="mods"><button type="button" data-mod="0" class="${openMod ? "" : "on"}">All modules</button>${mods.map(m => `<button type="button" data-mod="${m}" class="${openMod === m ? "on" : ""}">Module ${m}</button>`).join("")}</div>` : ""}
@@ -485,7 +497,7 @@ function renderSubject(all) {
 function workList(a, removable) {
   return (a.work || []).map(w => { const li = linkInfo(w.url); return `<div class="wl" data-wid="${esc(w.id)}"><span class="wi">${li.icon}</span><a href="${esc(w.url)}" target="_blank" rel="noopener"><b>${esc(w.label || li.kind)}</b><small>${esc(w.label ? li.kind + " · " : "")}${esc(li.host)}${w.added ? " · added " + new Date(w.added).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}</small></a>${removable ? `<button type="button" class="icon" data-sheet="unwork" aria-label="Remove link" title="Remove link">${ICON.x}</button>` : ""}</div>`; }).join("");
 }
-const mineCount = all => all.filter(a => a.work.length || a.note || a.edited || a.custom || a.sent.length || a.removed).length;
+const mineCount = all => all.filter(a => a.work.length || a.note || a.edited || a.custom || a.sent.length || a.removed || a.grade || a.steps.length).length;
 function mineCard(a, extra) {
   const s = subjOf(a.sid);
   return `<div class="mcard" style="--c:${s.color}" data-id="${esc(a.id)}">
@@ -500,13 +512,20 @@ function renderMine(all) {
   const sec = (t, list, fn, hint) => list.length ? `<section class="group"><div class="ghead"><h2>${t}</h2><span class="n">${list.length}</span>${hint ? `<span class="hint">${hint}</span>` : ""}</div><div class="mgrid">${list.map(fn).join("")}</div></section>` : "";
   const html =
     sec("Hub updates to review", vis.filter(a => a.conflicts.length), a => mineCard(a, conflictHTML(a)), "He changed something you'd also changed") +
+    sec("In progress", vis.filter(a => (a.inProgress || a.steps.length) && !a.done).sort(byDue), a => mineCard(a, stepsSummary(a)), "What you've started") +
     sec("Your submissions", withWork, a => mineCard(a, `<div class="wlist">${workList(a, false)}</div>`), "Links to the work you handed in") +
+    sec("Results", vis.filter(a => a.grade), a => mineCard(a, `<div class="gradebox"><b>${esc(a.grade.score)}<small> / ${esc(a.grade.outOf)}</small></b>${gradePct(a.grade) != null ? `<span>${gradePct(a.grade)}%</span>` : ""}</div>${a.grade.feedback ? `<div class="note full">${esc(a.grade.feedback)}</div>` : ""}`), "Marks and feedback you've recorded") +
     sec("Emails sent", vis.filter(a => a.sent.length), a => mineCard(a, sentHTML(a))) +
     sec("Your notes", vis.filter(a => a.note), a => mineCard(a, `<div class="note full">${esc(a.note)}</div>`)) +
     sec("Your changes", vis.filter(a => a.edited), a => mineCard(a, `<div class="diff">${Object.keys(FIELD_LABEL).filter(k => (a.base[k] ?? null) !== (a[k] ?? null)).map(k => `<div><span>${FIELD_LABEL[k]}</span><s>${esc(showVal(k, a.base[k]))}</s><b>${esc(showVal(k, a[k]))}</b></div>`).join("")}</div>`), "Hub version crossed out, yours in bold") +
     sec("Added by you", vis.filter(a => a.custom), a => mineCard(a, "")) +
     sec("No longer on the hub", vis.filter(a => a.removed), a => mineCard(a, `<p class="hint">Your friend removed this. Your ticks, notes and links are kept.</p>`));
   return toolbar(all, false) + (html || `<div class="empty"><b>Nothing here yet</b>Open any assignment and use “Add link” to save your Google Doc, Drive file or YouTube video. Your notes, edits and sent emails show up here too.</div>`);
+}
+function stepsSummary(a) {
+  if (!a.steps.length) return `<p class="hint">Marked as in progress. Break it into steps to see how far along you are.</p>`;
+  const d = a.steps.filter(x => x.done).length, next = a.steps.find(x => !x.done);
+  return `<div class="stepbar"><div class="pbar"><i style="width:${d / a.steps.length * 100}%"></i></div><span>${d}/${a.steps.length}</span></div>${next ? `<p class="hint">Next: ${esc(next.t)}</p>` : `<p class="hint">All steps done. Tick it off when submitted.</p>`}`;
 }
 function conflictHTML(a) {
   return `<div class="conflictbox"><span><b>Your friend updated this after you changed it.</b> Your version is still showing.</span>
@@ -517,10 +536,66 @@ function sentHTML(a) {
   return `<div class="sentlog">${a.sent.slice().reverse().map(m => `<div>${ICON.send}<span>${m.via === "gmail" ? "Sent" : "Drafted"} to ${esc(m.to)} · ${new Date(m.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>`).join("")}</div>`;
 }
 
+// ---------- Calendar ----------
+function renderCalendar(all) {
+  const t = tasks(all).filter(a => !a.hidden && a.due && inFilter(a) && matches(a));
+  const byDay = {}; for (const a of t) (byDay[a.due] = byDay[a.due] || []).push(a);
+  for (const k in byDay) byDay[k].sort((x, y) => x.done - y.done || byDue(x, y));
+  const y = calMonth.getFullYear(), m = calMonth.getMonth(), start = new Date(y, m, 1 - new Date(y, m, 1).getDay());
+  const todayIso = isoDay(new Date());
+  let cells = "";
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i), iso = isoDay(d), list = byDay[iso] || [];
+    if (i === 35 && d.getMonth() !== m) break; // drop an empty sixth week
+    const cls = [d.getMonth() !== m && "out", iso === todayIso && "today", iso === calSel && "sel", list.some(a => !a.done && isPast(a)) && "late"].filter(Boolean).join(" ");
+    cells += `<button type="button" class="cday ${cls}" data-day="${iso}" aria-label="${d.toDateString()}${list.length ? `, ${list.length} due` : ""}"><span class="dn">${d.getDate()}</span>
+      <span class="pills">${list.slice(0, 3).map(a => `<span class="cpill${a.done ? " done" : ""}" style="--c:${subjOf(a.sid).color}">${esc(shortTitle(a.title, 34))}</span>`).join("")}${list.length > 3 ? `<span class="cmore">+${list.length - 3} more</span>` : ""}</span>
+      <span class="dots">${list.slice(0, 4).map(a => `<i style="background:${a.done ? "var(--line-strong)" : subjOf(a.sid).color}"></i>`).join("")}</span></button>`;
+  }
+  const sel = byDay[calSel] || [];
+  const selLabel = parseD(calSel).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const wk = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return toolbar(all) + `<section class="cal card">
+      <div class="calhead"><h2>${calMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
+        <div class="btnrow"><button type="button" class="icon" data-cal="-1" aria-label="Previous month">${svg('<path d="M15 6l-6 6 6 6"/>')}</button><button type="button" class="btn" data-cal="0">Today</button><button type="button" class="icon" data-cal="1" aria-label="Next month">${svg('<path d="M9 6l6 6-6 6"/>')}</button></div></div>
+      <div class="cgrid">${wk.map(w => `<span class="wk">${w}</span>`).join("")}${cells}</div>
+    </section>
+    ${group(selLabel, sel, "", sel.length ? "" : "") || `<div class="empty"><b>${esc(selLabel)}</b>Nothing due this day.</div>`}
+    <div class="calexport card"><div><b>Put your deadlines in your calendar</b><p class="hint">Download every deadline as one file. Double-click it on your Mac to add them to Apple Calendar, or import it in Google Calendar under Settings → Import.</p></div><button type="button" class="btn" data-ics>${svg('<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>')}Download deadlines (.ics)</button></div>`;
+}
+// One file with every pending deadline, each with an alert the day before.
+function downloadICS() {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const escI = v => String(v || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/[,;]/g, m => "\\" + m);
+  const fold = l => l.match(/.{1,73}/g).join("\r\n ");
+  const ev = tasks(items()).filter(a => a.due && !a.hidden && !a.done).map(a => {
+    const d = a.due.replace(/-/g, ""), s = subjOf(a.sid);
+    const when = a.time
+      ? [`DTSTART:${d}T${a.time.replace(":", "")}00`, `DTEND:${d}T${a.time.replace(":", "")}00`]
+      : [`DTSTART;VALUE=DATE:${d}`, `DTEND;VALUE=DATE:${isoDay(new Date(parseD(a.due).getTime() + 864e5)).replace(/-/g, "")}`];
+    return ["BEGIN:VEVENT", `UID:${a.id}@my-coursework`, `DTSTAMP:${stamp}`, ...when,
+      `SUMMARY:${escI("Due: " + shortTitle(a.title, 80))}`, `DESCRIPTION:${escI(`${s.name}\n${a.title}${a.link ? "\n" + a.link : ""}`)}`, a.link ? `URL:${a.link}` : null,
+      "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${escI("Due tomorrow: " + shortTitle(a.title, 60))}`, "TRIGGER:-P1D", "END:VALARM", "END:VEVENT"].filter(Boolean).map(fold).join("\r\n");
+  });
+  if (!ev.length) { toast("No upcoming deadlines to export"); return; }
+  const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//My Coursework//EN", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Coursework deadlines", ...ev, "END:VCALENDAR"].join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([ics], { type: "text/calendar" })); a.download = "coursework-deadlines.ics";
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast(`${ev.length} deadline${ev.length === 1 ? "" : "s"} downloaded. Open the file to add them.`);
+}
+function googleCalURL(a) {
+  const d = a.due.replace(/-/g, "");
+  const dates = a.time ? `${d}T${a.time.replace(":", "")}00/${d}T${a.time.replace(":", "")}00` : `${d}/${isoDay(new Date(parseD(a.due).getTime() + 864e5)).replace(/-/g, "")}`;
+  const q = new URLSearchParams({ action: "TEMPLATE", text: "Due: " + shortTitle(a.title, 80), dates, details: `${subjOf(a.sid).name}\n${a.title}${a.link ? "\n" + a.link : ""}`, ctz: "Asia/Kathmandu" });
+  return "https://calendar.google.com/calendar/render?" + q.toString();
+}
+
 function renderNav(all) {
   const t = tasks(all).filter(a => !a.hidden), open = t.filter(a => !a.done), late = open.filter(isPast).length, dn = t.length - open.length;
   const on = v => view === v ? " on" : "";
   let h = `<button type="button" class="nv${on("todo")}" data-go="todo">${ICON.todo}<span>To do</span><span class="ct${late ? " late" : ""}">${open.length}</span></button>
+    <button type="button" class="nv${on("calendar")}" data-go="calendar">${ICON.cal}<span>Calendar</span><span class="ct"></span></button>
     <button type="button" class="nv${on("done")}" data-go="done">${ICON.done}<span>Completed</span><span class="ct">${dn}</span></button>
     <button type="button" class="nv${on("mine")}" data-go="mine">${ICON.me}<span>My work</span><span class="ct">${mineCount(all)}</span></button>
     <button type="button" class="nv${on("subjects")}" data-go="subjects">${ICON.book}<span>All subjects</span><span class="ct"></span></button>
@@ -531,7 +606,7 @@ function renderNav(all) {
   }).join("");
   $("#navlist").innerHTML = h;
   const tb = (v, icon, label, badge) => `<button type="button" class="${(view === v || (v === "subjects" && view === "subject")) ? "on" : ""}" data-go="${v}">${icon}<span>${label}</span>${badge ? `<span class="badge">${badge}</span>` : ""}</button>`;
-  $("#tabbar").innerHTML = tb("todo", ICON.todo, "To do", late) + tb("subjects", ICON.book, "Subjects") + tb("mine", ICON.me, "My work") + tb("done", ICON.done, "Completed") + `<button type="button" class="add" data-add><span class="plus">${ICON.plus}</span><span>Add</span></button>`;
+  $("#tabbar").innerHTML = tb("todo", ICON.todo, "To do", late) + tb("calendar", ICON.cal, "Calendar") + tb("subjects", ICON.book, "Subjects") + tb("mine", ICON.me, "My work") + `<button type="button" class="add" data-add><span class="plus">${ICON.plus}</span><span>Add</span></button>`;
   renderHubStatus();
 }
 function renderHubStatus() {
@@ -571,10 +646,11 @@ function render() {
     $("#headline").textContent = greeting() + (first ? ", " + first : "");
     $("#subline").textContent = `${dateStr} · ` + (open.length ? `${open.length} to do` + (week ? `, ${week} due this week` : "") + (late ? `, ${late} overdue` : "") : "you're all caught up");
   } else if (view === "done") { $("#headline").textContent = "Completed"; $("#subline").textContent = `${t.length - open.length} of ${t.length} assignments done`; }
+  else if (view === "calendar") { $("#headline").textContent = "Calendar"; $("#subline").textContent = "Every deadline by date · tap a day to see what's due"; }
   else if (view === "mine") { $("#headline").textContent = "My work"; $("#subline").textContent = "Everything that's yours: submissions, emails, notes and changes"; }
   else { $("#headline").textContent = "Subjects"; $("#subline").textContent = view === "subject" ? "Tick readings as you finish them · lecture notes open in Drive" : "Assignments, readings and lecture notes for each course"; }
   const focusQ = document.activeElement && document.activeElement.id === "q", pos = focusQ ? document.activeElement.selectionStart : 0;
-  $("#view").innerHTML = view === "todo" ? renderTodo(all) : view === "done" ? renderDone(all) : view === "mine" ? renderMine(all) : view === "subject" ? renderSubject(all) : renderSubjects(all);
+  $("#view").innerHTML = view === "todo" ? renderTodo(all) : view === "done" ? renderDone(all) : view === "mine" ? renderMine(all) : view === "calendar" ? renderCalendar(all) : view === "subject" ? renderSubject(all) : renderSubjects(all);
   if (focusQ && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); }
   saveUI();
 }
@@ -582,10 +658,10 @@ function render() {
 /* =========================================================================
    7. ACTIONS
    ========================================================================= */
-function toast(msg, action, label = "Undo") {
+function toast(msg, action, label = "Undo", ms) {
   const t = $("#toast"); $("#toastmsg").textContent = msg;
   const b = $("#toastbtn"); b.hidden = !action; b.textContent = label; b.onclick = () => { action(); t.classList.remove("on"); };
-  t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), action ? 6000 : 4000);
+  t.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("on"), ms || (action ? 6000 : 4000));
 }
 function toggle(id) {
   const was = !!S.done[id], it = items().find(a => a.id === id);
@@ -608,11 +684,14 @@ function resolveConflict(id, which) {
 }
 document.addEventListener("click", e => {
   if (e.target.closest(".sheet")) return;
-  const t = e.target.closest("[data-toggle],[data-open],[data-add],[data-go],[data-subj],[data-filter],[data-tab],[data-mod],[data-setup],[data-showhidden],[data-jump],[data-signin],[data-dismiss],[data-settings],[data-refreshhub],[data-conflict],a");
+  const t = e.target.closest("[data-toggle],[data-open],[data-add],[data-go],[data-subj],[data-filter],[data-tab],[data-mod],[data-setup],[data-showhidden],[data-jump],[data-signin],[data-dismiss],[data-settings],[data-refreshhub],[data-conflict],[data-day],[data-cal],[data-ics],a");
   if (!t || t.tagName === "A") return;
   const row = t.closest("[data-id]"), id = row && row.dataset.id;
   if (t.hasAttribute("data-toggle")) toggle(id);
   else if (t.dataset.conflict) resolveConflict(t.dataset.id, t.dataset.conflict);
+  else if (t.dataset.day) { calSel = t.dataset.day; const d = parseD(calSel); if (d.getMonth() !== calMonth.getMonth()) calMonth = new Date(d.getFullYear(), d.getMonth(), 1); render(); }
+  else if (t.dataset.cal) { const n = Number(t.dataset.cal); calMonth = n ? new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1); if (!n) calSel = isoDay(new Date()); render(); }
+  else if (t.hasAttribute("data-ics")) downloadICS();
   else if (t.hasAttribute("data-open")) openSheet(t.dataset.id || id);
   else if (t.hasAttribute("data-add")) openSheet(null);
   else if (t.hasAttribute("data-signin")) signIn();
@@ -639,8 +718,12 @@ document.addEventListener("keydown", e => {
   const row = e.target.closest && e.target.closest(".item[data-open]");
   if (row && e.target === row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openSheet(row.dataset.id); return; }
   if (e.target.matches("input,textarea,select") || anyPanelOpen()) return;
-  if (e.key === "/") { e.preventDefault(); if (!["todo", "done", "mine"].includes(view)) { view = "todo"; render(); } $("#q").focus(); }
+  if (e.key === "/") { e.preventDefault(); if (!["todo", "done", "mine", "calendar"].includes(view)) { view = "todo"; render(); } $("#q").focus(); }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const go = { t: "todo", c: "calendar", s: "subjects", m: "mine", d: "done" }[e.key];
   if (e.key === "n") { e.preventDefault(); openSheet(null); }
+  else if (go) { view = go; openSubj = null; render(); window.scrollTo({ top: 0 }); }
+  else if (e.key === "?") toast("Shortcuts: / search · n new · t to do · c calendar · s subjects · m my work · d completed · Esc close");
 });
 document.addEventListener("input", e => { if (e.target.id === "q") { query = e.target.value.trim().toLowerCase(); render(); } });
 addEventListener("scroll", () => { const tb = document.querySelector(".toolbar"); if (tb) tb.classList.toggle("stuck", tb.getBoundingClientRect().top <= 14 && scrollY > 40); }, { passive: true });
@@ -684,8 +767,13 @@ function sheetView(a) {
     <div class="actions">
       ${a.kind !== "note" ? `<button type="button" class="btn${a.done ? " on" : ""}" data-sheet="done">${svg('<path d="M5 12l5 5L20 7"/>', 3)}${doneLabel}</button>` : ""}
       ${a.link ? `<a class="btn" href="${esc(a.link)}" target="_blank" rel="noopener">${ICON.open}Open ${a.kind === "assignment" ? "assignment" : "file"}</a>` : ""}
+      ${a.kind === "assignment" && !a.done ? `<button type="button" class="btn${a.inProgress ? " on" : ""}" data-sheet="prog">${svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>')}${a.inProgress ? "In progress" : "Mark in progress"}</button>` : ""}
       ${a.kind !== "note" ? `<button type="button" class="btn${a.star ? " on" : ""}" data-sheet="pin">${ICON.pin}${a.star ? "Pinned" : "Pin to top"}</button>` : ""}
+      ${a.due && a.kind !== "note" ? `<a class="btn" href="${esc(googleCalURL(a))}" target="_blank" rel="noopener">${ICON.cal}Add to Google Calendar</a>` : ""}
     </div>
+    ${a.words && a.kind === "assignment" ? `<p class="hint">Length asked for: <b>${esc(a.words)}</b></p>` : ""}
+    ${a.kind === "assignment" ? stepsHTML(a) : ""}
+    ${a.kind === "assignment" && (a.done || a.grade) ? gradeHTML(a) : ""}
     <section class="worksec">
       <div class="whead"><h3>${a.kind === "assignment" ? "My submission" : "My links"}</h3><span>${a.kind === "assignment" ? "Your doc, Drive file or video for this assignment" : "Summaries, highlights, anything related"}</span></div>
       <div class="wlist">${workList(a, true)}</div>
@@ -693,6 +781,31 @@ function sheetView(a) {
       ${a.kind === "assignment" ? `<button type="button" class="btn" data-sheet="email" style="align-self:flex-start">${ICON.mail}Email my submission</button>` : ""}
       ${a.sent.length ? sentHTML(a) : ""}
     </section>`;
+}
+const STARTER = ["Read the brief and marking criteria", "Gather sources", "Write the first draft", "Proofread and check the word count", "Submit and save the link"];
+function stepsHTML(a) {
+  const d = a.steps.filter(x => x.done).length;
+  return `<section class="stepsec">
+    <div class="whead"><h3>Steps</h3><span>${a.steps.length ? `${d} of ${a.steps.length} done` : "Break it into small pieces"}</span></div>
+    ${a.steps.length ? `<div class="pbar"><i style="width:${d / a.steps.length * 100}%"></i></div>` : ""}
+    <div class="steps">${a.steps.map(x => `<div class="step${x.done ? " on" : ""}" data-step="${esc(x.id)}"><button type="button" class="check round${x.done ? " on" : ""}" data-sheet="step" aria-label="${x.done ? "Mark step not done" : "Mark step done"}">${ICON.check}</button><span>${esc(x.t)}</span><button type="button" class="icon" data-sheet="unstep" aria-label="Remove step">${ICON.x}</button></div>`).join("")}</div>
+    <div class="stepadd"><input id="st-new" type="text" placeholder="Add a step, e.g. Find three sources" aria-label="New step"><button type="button" class="btn" data-sheet="addstep">${ICON.plus}Add</button></div>
+    ${a.steps.length ? "" : `<button type="button" class="linkbtn" data-sheet="starter">Use a starter plan: brief → sources → draft → proofread → submit</button>`}
+  </section>`;
+}
+function gradeHTML(a) {
+  const g = a.grade || {};
+  return `<section class="gradesec">
+    <div class="whead"><h3>Result</h3><span>Record your mark when it comes back</span></div>
+    <div class="graderow"><input id="g-score" type="text" inputmode="decimal" placeholder="Mark" value="${esc(g.score ?? "")}" aria-label="Your mark"><span>out of</span><input id="g-out" type="text" inputmode="decimal" placeholder="e.g. 20" value="${esc(g.outOf ?? "")}" aria-label="Out of">${gradePct(g) != null ? `<b>${gradePct(g)}%</b>` : ""}</div>
+    <textarea id="g-fb" rows="2" placeholder="Teacher's feedback" aria-label="Teacher's feedback">${esc(g.feedback || "")}</textarea>
+  </section>`;
+}
+function addStep(text) {
+  if (!editing) return; const id = editing.id, t = (text ?? $("#st-new").value).trim(); if (!t) return;
+  (S.steps[id] = S.steps[id] || []).push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t, done: false });
+  S.prog[id] = S.prog[id] || Date.now();
+  persist(); openSheet(id, true); const n = $("#st-new"); if (n) n.focus();
 }
 function openSheet(id, keep) {
   const keptNote = keep ? f("note").value : null;
@@ -722,7 +835,7 @@ function openSheet(id, keep) {
   $("#f-hide").hidden = !a;
   $("#f-hide").textContent = a && a.custom ? "Delete" : a && a.removed ? "Forget this item" : a && a.hidden ? "Unhide" : "Hide from my list";
   $("#f-save").textContent = a ? "Save" : "Add to my list";
-  if (keep) { $("#w-url") && $("#w-url").focus(); return; }
+  if (keep) return;
   showPanel($("#sheet"), a ? $("#sheet [data-close]") : f("title"));
 }
 function addWork() {
@@ -730,9 +843,25 @@ function addWork() {
   const url = normURL($("#w-url").value), id = editing.id;
   if (!url) { $("#w-url").focus(); $("#w-url").classList.add("bad"); toast("That doesn't look like a link. Paste the full address."); return; }
   (S.work[id] = S.work[id] || []).push({ id: Date.now().toString(36), url, label: $("#w-label").value.trim(), added: Date.now() });
-  persist(); openSheet(id, true); toast("Link saved");
+  persist(); openSheet(id, true); $("#w-url").focus(); toast("Link saved");
 }
-$("#sheet").addEventListener("keydown", e => { if (e.key === "Enter" && (e.target.id === "w-url" || e.target.id === "w-label")) { e.preventDefault(); addWork(); } });
+$("#sheet").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  if (e.target.id === "w-url" || e.target.id === "w-label") { e.preventDefault(); addWork(); }
+  else if (e.target.id === "st-new") { e.preventDefault(); addStep(); }
+});
+// Marks save as you type.
+let gradeTimer = null;
+$("#sheet").addEventListener("input", e => {
+  if (!editing || !/^g-/.test(e.target.id)) return;
+  const id = editing.id;
+  clearTimeout(gradeTimer);
+  gradeTimer = setTimeout(() => {
+    const g = { score: $("#g-score").value.trim(), outOf: $("#g-out").value.trim(), feedback: $("#g-fb").value.trim() };
+    if (g.score || g.outOf || g.feedback) S.grades[id] = g; else delete S.grades[id];
+    persist();
+  }, 400);
+});
 $("#sheet").addEventListener("input", e => { if (e.target.id === "w-url") e.target.classList.remove("bad"); });
 $("#sheet").addEventListener("click", e => {
   const c = e.target.closest("[data-conflict]"); if (c) { resolveConflict(c.dataset.id, c.dataset.conflict); return; }
@@ -741,6 +870,16 @@ $("#sheet").addEventListener("click", e => {
   if (act === "done") { toggle(id); setTimeout(() => openSheet(id, true), 340); }
   else if (act === "pin") { S.star[id] ? delete S.star[id] : (S.star[id] = 1); persist(); openSheet(id, true); toast(S.star[id] ? "Pinned to the top of To do" : "Unpinned"); }
   else if (act === "work") addWork();
+  else if (act === "prog") { S.prog[id] ? delete S.prog[id] : (S.prog[id] = Date.now()); persist(); openSheet(id, true); toast(S.prog[id] ? "Marked as in progress" : "No longer in progress"); }
+  else if (act === "addstep") addStep();
+  else if (act === "starter") { STARTER.forEach(t => (S.steps[id] = S.steps[id] || []).push({ id: Math.random().toString(36).slice(2, 9), t, done: false })); S.prog[id] = S.prog[id] || Date.now(); persist(); openSheet(id, true); }
+  else if (act === "step" || act === "unstep") {
+    const sid = b.closest("[data-step]").dataset.step, list = S.steps[id] || [], i = list.findIndex(x => x.id === sid);
+    if (act === "step") list[i].done = !list[i].done;
+    else { list.splice(i, 1); if (!list.length) delete S.steps[id]; }
+    persist(); openSheet(id, true);
+    if (act === "step" && list.length && list.every(x => x.done) && !S.done[id]) toast("All steps done. Submitted?", () => { toggle(id); setTimeout(() => openSheet(id, true), 340); }, "Mark as done");
+  }
   else if (act === "email") openComposer(id);
   else if (act === "unwork") {
     const wid = b.closest("[data-wid]").dataset.wid, list = S.work[id] || [], i = list.findIndex(w => w.id === wid), w = list[i];
@@ -804,50 +943,62 @@ function mailText(a, teacherName) {
     `Course: ${s.code ? s.code + " – " : ""}${s.short}`,
     `Assignment: ${a.title}`,
     a.sid !== "general" ? `Module: ${a.module || 1}` : null,
-    a.due ? `Due date: ${fmtLong(a.due)}${a.time ? ", " + fmtTime(a.time) : ""}` : null,
-    `Submitted on: ${fmtLong(new Date().toISOString().slice(0, 10))}`,
+    a.due ? `Due: ${fmtLong(a.due)}${a.time ? ", " + fmtTime(a.time) : ""}` : null,
   ].filter(Boolean);
   const sig = [p.name || "[Your name]", p.program, p.studentId ? `Student ID: ${p.studentId}` : null, p.institution || "Kathmandu University School of Education", p.phone].filter(Boolean);
   return [
     `Dear ${teacherName || "Sir/Madam"},`,
     "",
-    `I hope this message finds you well. Please find below my submission for the following assignment.`,
+    "I hope you are well. Please find my submission for the assignment below.",
     "",
     ...details,
     "",
-    a.work.length > 1 ? "Submission links:" : "Submission link:",
+    a.work.length > 1 ? "My submission files:" : "My submission:",
     ...links,
     "",
-    "I have made sure the link is accessible. Kindly let me know if you have any trouble opening it, or if anything further is required from my side.",
+    "The link is set so you can open it. Please let me know if you have any trouble accessing it, or if anything else is needed.",
     "",
-    "Thank you for your time and guidance.",
+    "Thank you for your time.",
     "",
     "Kind regards,",
     ...sig,
   ].join("\n");
 }
-// Turn the plain-text message into a clean HTML email. Built from the text, so your edits always carry over.
+// Turn the plain-text message into an HTML email. It's built from the text, so your edits carry over.
+// Gmail strips stylesheets, web fonts and modern layout, so this uses only inline styles and simple
+// tables, one accent colour, and labelled buttons instead of long raw links.
 function mailHTML(text) {
-  const linkify = s => esc(s).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:#1F3A5F;font-weight:600;text-decoration:underline">${u.length > 60 ? u.slice(0, 57) + "…" : u}</a>`);
+  const NAVY = "#1F3A5F", INK = "#2B2B2F", GRAY = "#6B6B73", LINE = "#E5E1D6";
+  const linkify = s => esc(s).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" style="color:${NAVY};text-decoration:underline">${linkInfo(u).host || u}</a>`);
   const blocks = text.replace(/\r/g, "").split(/\n\s*\n/);
-  const out = blocks.map((blk, bi) => {
-    const lines = blk.split("\n");
-    if (lines.length && lines.every(l => /^[A-Z][A-Za-z ()\/.-]{1,24}:\s+\S/.test(l)) && !/^Dear\b/.test(lines[0])) {
-      return `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;background:#EAF1F9;border-radius:12px;margin:4px 0 18px"><tbody>${lines.map((l, i) => { const k = l.indexOf(":"); return `<tr><td style="padding:${i ? 6 : 14}px 16px ${i === lines.length - 1 ? 14 : 6}px;color:#6B6B73;font-size:13px;white-space:nowrap;vertical-align:top;width:120px">${esc(l.slice(0, k))}</td><td style="padding:${i ? 6 : 14}px 16px ${i === lines.length - 1 ? 14 : 6}px 0;color:#1F3A5F;font-size:14px;font-weight:600;vertical-align:top">${linkify(l.slice(k + 1).trim())}</td></tr>`; }).join("")}</tbody></table>`;
+  const out = blocks.map(blk => {
+    const lines = blk.split("\n").filter(l => l.trim() !== "");
+    if (!lines.length) return "";
+    // "Label: value" lines → a quiet details table with hairlines.
+    if (lines.every(l => /^[A-Z][A-Za-z ()\/.-]{1,24}:\s+\S/.test(l)) && !/^Dear\b/.test(lines[0])) {
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;margin:4px 0 22px;border-top:1px solid ${LINE}">${lines.map(l => { const k = l.indexOf(":"); return `<tr><td style="padding:9px 14px 9px 0;border-bottom:1px solid ${LINE};color:${GRAY};font-size:13px;white-space:nowrap;vertical-align:top;width:96px">${esc(l.slice(0, k))}</td><td style="padding:9px 0;border-bottom:1px solid ${LINE};color:${INK};font-size:14px;vertical-align:top">${linkify(l.slice(k + 1).trim())}</td></tr>`; }).join("")}</table>`;
     }
+    // A heading followed by "• label: url" lines → labelled buttons.
     const bullets = lines.filter(l => /^\s*[•\-*]\s+/.test(l));
     if (bullets.length && bullets.length >= lines.length - 1) {
-      const head = lines.length > bullets.length ? `<p style="margin:0 0 8px;font-weight:600;color:#1F3A5F">${linkify(lines[0])}</p>` : "";
-      return head + `<ul style="margin:0 0 18px;padding:0;list-style:none">${bullets.map(l => { const t = l.replace(/^\s*[•\-*]\s+/, ""), m = /^([^:]{1,40}):\s+(https?:\/\/\S+)$/.exec(t); return `<li style="margin:0 0 8px;padding:10px 14px;border:1px solid #E5DFCF;border-radius:10px">${m ? `<span style="color:#2B2B2F;font-weight:600">${esc(m[1])}</span><br>${linkify(m[2])}` : linkify(t)}</li>`; }).join("")}</ul>`;
+      const head = lines.length > bullets.length ? `<p style="margin:0 0 10px;font-size:13px;font-weight:600;letter-spacing:.02em;color:${GRAY}">${esc(lines[0].replace(/:$/, ""))}</p>` : "";
+      return head + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px">${bullets.map(l => {
+        const t = l.replace(/^\s*[•\-*]\s+/, ""), m = /^(.{1,60}?):\s+(https?:\/\/\S+)$/.exec(t);
+        return `<tr><td style="padding:0 0 8px">${m
+          ? `<a href="${esc(m[2])}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:${NAVY};color:#FFFFFF;font-size:14px;font-weight:600;text-decoration:none">${esc(m[1])} &#8599;</a><span style="font-size:12px;color:${GRAY}">&nbsp;&nbsp;${esc(linkInfo(m[2]).kind)}</span>`
+          : `<span style="font-size:14px;color:${INK}">${linkify(t)}</span>`}</td></tr>`; }).join("")}</table>`;
     }
-    const isSig = /^(kind|best|warm)?\s*regards,?$/i.test(lines[0].trim()) || /^sincerely,?$/i.test(lines[0].trim());
-    if (isSig) return `<p style="margin:0 0 4px">${esc(lines[0])}</p><p style="margin:0;line-height:1.5"><strong style="color:#1F3A5F">${esc(lines[1] || "")}</strong>${lines.slice(2).map(l => `<br><span style="color:#6B6B73;font-size:13px">${linkify(l)}</span>`).join("")}</p>`;
+    // Sign-off: name in bold, details in small grey under a hairline.
+    if (/^(kind|best|warm)\s+regards,?$|^(sincerely|regards|thank you),?$/i.test(lines[0].trim()) && lines.length > 1) {
+      return `<p style="margin:0 0 14px">${esc(lines[0])}</p><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${LINE};padding-top:12px"><tr><td style="padding-top:12px;line-height:1.5"><span style="font-weight:600;color:${NAVY};font-size:15px">${esc(lines[1])}</span>${lines.slice(2).map(l => `<br><span style="color:${GRAY};font-size:13px">${linkify(l)}</span>`).join("")}</td></tr></table>`;
+    }
     return `<p style="margin:0 0 16px">${lines.map(linkify).join("<br>")}</p>`;
   }).join("");
-  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:15px;line-height:1.6;color:#2B2B2F;max-width:620px"><div style="height:3px;width:40px;background:#C8102E;border-radius:2px;margin:0 0 20px"></div>${out}</div>`;
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:${INK};max-width:560px">${out}</div>`;
 }
 function gmailComposeURL(m) {
-  const q = new URLSearchParams({ view: "cm", fs: "1", to: m.to, su: m.subject, body: m.text });
+  const q = new URLSearchParams({ view: "cm", fs: "1", to: m.to, su: m.subject });
+  if (m.text) q.set("body", m.text);
   if (m.cc) q.set("cc", m.cc);
   if (fb && fb.user && fb.user.email) q.set("authuser", fb.user.email);
   return "https://mail.google.com/mail/?" + q.toString();
@@ -907,9 +1058,21 @@ function recordSent(via) {
   if (c("markdone").checked && !c("markdone").parentElement.hidden) S.done[a.id] = Date.now();
   rememberTeacher(a); persist();
 }
-c("gmail").addEventListener("click", () => {
-  const id = mailFor;
-  setTimeout(() => toast("Sent it from Gmail?", () => { mailFor = id; recordSent("compose"); render(); toast("Marked as submitted"); }, "Yes, mark as sent"), 400);
+// Gmail's pre-filled draft link can only carry plain text. So the formatted email goes on the
+// clipboard instead, and the draft opens with just the address and subject: paste, and it keeps its design.
+c("gmail").addEventListener("click", e => {
+  const id = mailFor, m = currentMail(), link = e.currentTarget;
+  const sent = () => { mailFor = id; recordSent("compose"); render(); toast("Marked as submitted"); };
+  let rich = false;
+  try {
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([mailHTML(m.text)], { type: "text/html" }), "text/plain": new Blob([m.text], { type: "text/plain" }) })])
+        .catch(() => toast("Couldn't copy the formatted version. The draft has the plain text instead."));
+      rich = true;
+    }
+  } catch (err) { rich = false; }
+  link.href = gmailComposeURL(rich ? { ...m, text: "" } : m);
+  toast(rich ? "Email copied. In Gmail, click in the message and press ⌘V." : "Draft opened in Gmail.", sent, "I sent it", 15000);
 });
 c("send").onclick = () => {
   const m = currentMail();
@@ -945,10 +1108,6 @@ function openSettings() {
   $("#s-account").innerHTML = `<h3>Account</h3>` + (!fbReady ? `<p class="hint">Cloud sync isn't set up. Fill in <b>config.js</b> with your Firebase settings to sign in.</p>`
     : u ? `<div class="kv"><span>Signed in as</span><b>${esc(u.email)}</b><span>Saving</span><span>${esc($("#syncst").textContent)}</span><span>Gmail</span><span>${gtok && gtok.exp > Date.now() ? "Allowed for this session" : "Asks permission the first time you send"}</span></div><div class="btnrow"><button type="button" class="btn ghost danger" id="s-signout">Sign out</button></div>`
     : `<p class="hint">Sign in to sync across devices and send emails from Gmail.</p><button type="button" class="gbtn" data-signin2>${ICON.google}Sign in with Google</button>`);
-  const R = { ...REMINDER_DEFAULTS, ...S.reminders };
-  $("#r-on").checked = R.enabled; $("#r-to").value = R.to || (u && u.email) || ""; $("#r-days").value = String(R.days);
-  $("#r-overdue").checked = R.overdue; $("#r-readings").checked = R.readings;
-  showReminderStatus();
   $("#s-hub").innerHTML = `<h3>Your friend's hub</h3><div class="kv"><span>Source</span><code>${esc(hubState.source || "—")}</code><span>Last checked</span><span>${hubState.at ? esc(ago(hubState.at)) : "never"}${hubState.cached ? " (offline copy)" : ""}</span><span>Items</span><span>${BASE.length} from the hub · ${S.custom.length} added by you</span></div><div class="btnrow"><button type="button" class="btn" id="s-refresh">${ICON.refresh}Check for updates now</button></div>`;
   showPanel($("#settings"), p("name"));
 }
@@ -972,22 +1131,8 @@ $("#settings").addEventListener("click", e => {
     S = mergeState(S, incoming); reconcile(); persist(); $("#s-import").value = ""; toast("Imported and merged with your data"); render();
   }
 });
-// The daily job writes reminderLog/<uid> after each email, so you can see it's working.
-function showReminderStatus() {
-  const el = $("#r-status");
-  if (!fb || !fb.user) { el.textContent = "Sign in to get reminders. They're sent from your account by a daily job on GitHub."; return; }
-  el.textContent = "Checking…";
-  fb.F.getDoc(fb.F.doc(fb.db, "reminderLog", fb.user.uid)).then(d => {
-    const L = d.exists() ? d.data() : null;
-    const when = t => new Date(t).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-    el.textContent = !L ? "No reminder sent yet. If it stays like this after tomorrow morning, finish the reminder setup in the README."
-      : [L.sentAt ? `Last email: ${when(L.sentAt)} · ${L.sentCount} item${L.sentCount === 1 ? "" : "s"} · to ${L.to}` : "",
-         L.checkedAt && L.checkedAt !== L.sentAt ? `Last checked ${when(L.checkedAt)}: nothing was due, so no email was sent.` : ""].filter(Boolean).join(" ");
-  }, () => { el.textContent = ""; });
-}
 $("#sform").addEventListener("submit", e => {
   e.preventDefault();
-  S.reminders = { enabled: $("#r-on").checked, to: $("#r-to").value.trim(), days: Number($("#r-days").value), overdue: $("#r-overdue").checked, readings: $("#r-readings").checked };
   S.profile = { ...S.profile, name: p("name").value.trim(), studentId: p("id").value.trim(), program: p("program").value.trim(), institution: p("inst").value.trim(), phone: p("phone").value.trim() };
   document.querySelectorAll("#s-teachers .trow").forEach(r => {
     const t = {}; r.querySelectorAll("input").forEach(i => { if (i.value.trim()) t[i.dataset.k] = i.value.trim(); });

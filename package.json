@@ -1,6 +1,0 @@
-{
-  "name": "my-coursework",
-  "private": true,
-  "type": "module",
-  "description": "Personal coursework tracker. No build step: the site is plain files served by GitHub Pages; scripts/remind.mjs runs in GitHub Actions."
-}

@@ -1,5 +1,4 @@
-// Shared by the website (app.js) and the daily reminder job (scripts/remind.mjs),
-// so both read your friend's hub exactly the same way.
+// Reads your friend's hub. Kept separate from app.js so the parsing rules live in one place.
 
 // data.js is JavaScript, not JSON. Running someone else's code inside your signed-in page
 // would give it access to your account, so it's parsed as plain data instead.

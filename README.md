@@ -4,6 +4,17 @@ A personal tracker built on top of a friend's shared [Assignment Hub](https://ne
 His list is read live; your ticks, edits, notes, submission links and sent emails are stored
 separately in your own Firebase account, so his updates never overwrite your work.
 
+## What it does
+
+- **To do** grouped by Overdue / Today / Tomorrow / This week / Later, with search and subject filters
+- **Calendar**: month view of every deadline; download them all as an `.ics` file for Apple or Google Calendar, or add one at a time to Google Calendar
+- **Steps** on each assignment (or a one-click starter plan), with progress shown in the list, plus an **In progress** status
+- **My submission** links (Google Docs, Drive, YouTube…), private **notes**, and **marks & feedback** once graded, with a per-subject average
+- **Email my submission** to your teacher: a formatted email you can send from Gmail directly, or copy and paste into a Gmail draft
+- **My work**: everything that's yours in one place: in progress, submissions, results, emails, notes and your edits
+- Word-count targets read from the assignment text, keyboard shortcuts (press `?`), light and dark mode
+- Installable: Safari → File → **Add to Dock** on Mac, or Share → **Add to Home Screen** on iPhone
+
 ## How syncing works
 
 | Situation | What happens |
@@ -54,26 +65,6 @@ Without this step, everything else works and **Open in Gmail** still opens a pre
 
 On iPhone: open the site in Safari → Share → **Add to Home Screen** for an app-like icon.
 
-## Daily reminders (optional)
-
-Every morning around 6:40 AM Nepal time, a GitHub job (`.github/workflows/reminders.yml`) reads the live hub
-plus your own progress and emails you what's overdue, due today, due tomorrow, or coming up in the next few days.
-It skips anything you've ticked, hidden, or moved, and it sends nothing on days with nothing due.
-Turn it on, off, or change how early it starts in **Settings → Email reminders**.
-
-It needs three secrets in the repository (**Settings → Secrets and variables → Actions → New repository secret**):
-
-| Name | Value |
-|---|---|
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase → ⚙️ Project settings → **Service accounts** → **Generate new private key**. Open the downloaded `.json` file in TextEdit and paste **all** of it. Keep this file private and delete it afterwards. |
-| `GMAIL_USER` | The Gmail address the reminders are sent **from** (yours is fine). |
-| `GMAIL_APP_PASSWORD` | A Gmail **app password**: <https://myaccount.google.com/apppasswords> (needs 2-Step Verification turned on). Paste the 16 letters. |
-
-Then publish the updated `firestore.rules` (it lets the site show when the last reminder went out).
-
-To test: **Actions → Daily reminders → Run workflow**. Leave *force* ticked to send one right away.
-GitHub pauses scheduled jobs in repositories with no activity for 60 days; if it emails you about that, click **Enable workflow**.
-
 ## Files
 
 - `index.html`, `styles.css` — layout and design (KU palette, Apple-style surfaces)
@@ -81,5 +72,4 @@ GitHub pauses scheduled jobs in repositories with no activity for 60 days; if it
 - `config.js` — your Firebase keys and the hub address (the only file you need to edit)
 - `firestore.rules` — security rules: only you can read or write your data
 - `hub-fallback.json` — offline copy used if the hub can't be reached on first load
-- `hub-core.js` — reads the hub; shared by the site and the reminder job
-- `scripts/remind.mjs`, `.github/workflows/reminders.yml` — the daily reminder email
+- `hub-core.js` — reads the hub (parsed as data, never run)

@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Coursework">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F3A5F'/%3E%3Crect width='64' height='6' fill='%23C8102E'/%3E%3Cpath d='M19 33l9 9 17-18' fill='none' stroke='white' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Inter:wght@400;500;600;700&display=swap">
@@ -89,7 +91,7 @@
     <label class="checkrow"><input type="checkbox" id="c-markdone" checked><span>Mark the assignment as done after sending</span></label>
   </form>
   <div class="sf">
-    <div><button class="btn ghost" type="button" id="c-copy">Copy text</button><a class="btn ghost" id="c-gmail" href="#" target="_blank" rel="noopener">Open in Gmail</a></div>
+    <div><button class="btn ghost" type="button" id="c-copy">Copy text</button><a class="btn" id="c-gmail" href="#" target="_blank" rel="noopener" title="Copies the formatted email and opens a Gmail draft. Paste with ⌘V.">Copy &amp; open Gmail</a></div>
     <div><button class="btn primary" type="button" id="c-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg>Send from my Gmail</button></div>
   </div>
 </aside>
@@ -108,17 +110,6 @@
       <div class="field"><label for="p-program">Programme</label><input id="p-program" type="text" placeholder="e.g. MPhil in Sustainable Development"></div>
       <div class="field"><label for="p-inst">Institution</label><input id="p-inst" type="text" placeholder="Kathmandu University School of Education"></div>
       <div class="field"><label for="p-phone">Phone <span class="opt">optional</span></label><input id="p-phone" type="tel"></div>
-    </section>
-    <section class="setgroup" id="s-remind">
-      <h3>Email reminders</h3><p class="hint">One short email each morning, around 6:40 AM Nepal time, listing what's still pending. Nothing is sent on days with nothing due.</p>
-      <label class="checkrow"><input type="checkbox" id="r-on"><span>Email me a daily reminder</span></label>
-      <div class="row2">
-        <div class="field"><label for="r-to">Send to</label><input id="r-to" type="email" placeholder="you@gmail.com"></div>
-        <div class="field"><label for="r-days">Start reminding me</label><select id="r-days"><option value="1">1 day before</option><option value="2">2 days before</option><option value="3">3 days before</option><option value="5">5 days before</option><option value="7">7 days before</option></select></div>
-      </div>
-      <label class="checkrow"><input type="checkbox" id="r-overdue"><span>Include overdue assignments</span></label>
-      <label class="checkrow"><input type="checkbox" id="r-readings"><span>Include readings that have a due date</span></label>
-      <p class="hint" id="r-status"></p>
     </section>
     <section class="setgroup"><h3>Teachers</h3><p class="hint">Filled in for you when you email a submission.</p><div id="s-teachers" class="stack"></div></section>
     <section class="setgroup" id="s-hub"></section>
