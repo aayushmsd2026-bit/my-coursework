@@ -1,8 +1,8 @@
 # My Coursework
 
-A personal tracker built on top of a friend's shared [Assignment Hub](https://neotahiro.github.io/assignment-hub/).
-His list is read live; your ticks, edits, notes, submission links and sent emails are stored
-separately in your own Firebase account, so his updates never overwrite your work.
+A personal tracker built on top of the class's shared [Assignment Hub](https://neotahiro.github.io/assignment-hub/).
+The hub's list is read live; your ticks, edits, notes, submission links and sent emails are stored
+separately in your own Firebase account, so hub updates never overwrite your work.
 
 ## What it does
 
@@ -19,14 +19,14 @@ separately in your own Firebase account, so his updates never overwrite your wor
 
 | Situation | What happens |
 |---|---|
-| He adds an assignment | It appears with a **New** tag. |
-| He changes a field you never touched | You get his update. |
-| He changes a field **you** also changed | Your value stays. The item is flagged **Hub updated** so you can pick *Use his version* or *Keep mine*. |
-| He renames an item's id | Your data is re-attached by subject + title. |
-| He deletes an item you have data on | It's kept under **My work → No longer on the hub**. |
-| His file has duplicate ids | The second copy becomes `id~2`, so nothing collides. |
+| The hub adds an assignment | It appears with a **New** tag. |
+| The hub changes a field you never touched | You get the update. |
+| The hub changes a field **you** also changed | Your value stays. The item is flagged **Hub updated** so you can pick *Use the hub version* or *Keep mine*. |
+| The hub renames an item's id | Your data is re-attached by subject + title. |
+| The hub deletes an item you have data on | It's kept under **My work → No longer on the hub**. |
+| The hub has duplicate ids | The second copy becomes `id~2`, so nothing collides. |
 
-His `data.js` is parsed as data, never executed, so nothing in his file can run inside your signed-in page.
+The hub's `data.js` is parsed as data, never executed, so nothing in it can run inside your signed-in page.
 
 ## Setup (about 15 minutes, once)
 
@@ -60,8 +60,7 @@ Without this step, everything else works and **Open in Gmail** still opens a pre
 ### 4. First run
 1. Open the site → **Sign in with Google**.
 2. **Settings (gear)** → fill in your name, programme, student ID, and each teacher's name/email.
-3. Moving from the Claude version? There, click **Copy my data**; here, paste it under
-   **Settings → Your data → Import and merge**.
+3. Have data from another account? Use **Settings → Your data → Copy my data** there, then **Import and merge** here.
 
 On iPhone: open the site in Safari → Share → **Add to Home Screen** for an app-like icon.
 

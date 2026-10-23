@@ -1,11 +1,11 @@
-// My Coursework — a personal layer on top of a friend's shared assignment hub.
+// My Coursework — a personal layer on top of the class's shared Assignment Hub.
 //
 // Two layers, never mixed:
-//   1. HUB   — your friend's data.js, fetched live and treated as read-only.
+//   1. HUB   — the hub's data.js, fetched live and treated as read-only.
 //   2. YOURS — everything you do (ticks, edits, notes, links, emails), stored per item id
 //              in your own Firestore document. Syncing the hub never touches this layer.
 // When the hub changes something you've also edited, your value is kept and the item is
-// flagged so you can choose. If he renames an id or deletes an item, your data is re-linked
+// flagged so you can choose. If the hub renames an id or deletes an item, your data is re-linked
 // by subject + title, or kept as "removed from the hub" — it is never thrown away.
 
 import { parseHub, hubItems, FIELDS, strip } from "./hub-core.js";
@@ -41,7 +41,7 @@ const ICON = {
 };
 
 /* =========================================================================
-   1. HUB — fetch your friend's data.js live and parse it without running it
+   1. HUB — fetch the hub's data.js live and parse it without running it
    ========================================================================= */
 
 const HUB_URLS = CONFIG.hubUrls || ["https://neotahiro.github.io/assignment-hub/data.js"];
@@ -79,12 +79,31 @@ function buildFromHub(hub) {
   SUBJ = hub.SUBJECTS.map(s => {
     const m = String(s.name || s.id).match(/^([A-Z]+\s*\d+)\s*:\s*(.+)$/);
     if (!palette[s.id]) palette[s.id] = nextColor();
-    return { id: s.id, code: m ? m[1] : "", short: m ? m[2] : s.name, name: s.name, color: `var(--s${palette[s.id]})`, modules: s.modules || hub.MODULE_COUNT || 5 };
+    return { id: s.id, code: m ? m[1] : "", short: m ? m[2] : s.name, name: s.name, color: `var(--s${palette[s.id]})`, modules: s.modules || hub.MODULE_COUNT || 5, sem: Number(s.semester) || 1 };
   });
-  SUBJ.push({ id: "general", code: "", short: "General", name: "General", color: "var(--s0)", modules: 1 });
+  SUBJ.push({ id: "general", code: "", short: "General", name: "General", color: "var(--s0)", modules: 1, sem: null });
   BASE = hubItems(hub);
   BASE_BY_ID = new Map(BASE.map(b => [b.id, b]));
 }
+// ---------- Semesters ----------
+// The hub can list SEMESTERS ({ id, name, start }) and tag each subject with `semester: n` (default 1).
+// Same rule as the hub: the current semester is the latest one that has started and has subjects.
+// "General" items show in every semester.
+let semPick = null;
+try { semPick = Number(sessionStorage.getItem("mc-sem")) || null; } catch (e) {}
+function semesters() {
+  const defs = (HUB && HUB.SEMESTERS) || [], used = [...new Set(SUBJ.map(s => s.sem).filter(n => n != null))];
+  const all = used.map(id => ({ start: "", name: "Semester " + id, ...(defs.find(d => Number(d.id) === id) || {}), id }));
+  return all.sort((a, b) => (a.start || "").localeCompare(b.start || "") || a.id - b.id);
+}
+function currentSem() {
+  const list = semesters(), today = isoDay(new Date());
+  const started = list.filter(x => !x.start || x.start <= today);
+  return (started[started.length - 1] || list[0] || { id: 1 }).id;
+}
+const activeSem = () => semesters().some(x => x.id === semPick) ? semPick : currentSem();
+const inSem = a => { const s = SUBJ.find(x => x.id === a.sid); return !s || s.sem == null || s.sem === activeSem(); };
+const scoped = () => items().filter(inSem);
 const subjOf = id => SUBJ.find(s => s.id === id) || { id, code: "", short: "Removed subject", name: "Removed subject", color: "var(--s0)", modules: 5 };
 
 /* =========================================================================
@@ -124,7 +143,7 @@ function reconcile() {
 }
 
 // Remember the last hub version of anything you've touched, so your data can be re-attached
-// if he renames its id, and kept if he deletes it.
+// if the hub renames its id, and kept if the hub deletes it.
 function updateSnaps() {
   let changed = false;
   for (const id of new Set(MAPS.flatMap(m => Object.keys(S[m])))) {
@@ -148,7 +167,7 @@ function items() {
     it.conflicts = conflicts;
     return it;
   });
-  // Items he removed but you have data on.
+  // Items the hub removed but you have data on.
   for (const id of new Set(MAPS.flatMap(m => Object.keys(S[m])))) {
     if (BASE_BY_ID.has(id) || S.custom.some(c => c.id === id) || !S.snap[id]) continue;
     const e = S.edits[id] || {}, sn = S.snap[id];
@@ -170,7 +189,7 @@ function wordTarget(t) {
   return !m ? "" : m[2] ? `${m[1]}–${m[2]} words` : `${m[1]} words`;
 }
 const gradePct = g => g && g.score !== "" && g.outOf ? Math.round(Number(g.score) / Number(g.outOf) * 100) : null;
-// Your friend's placeholder entries ("…please ignore") start hidden; you can unhide them.
+// The hub's placeholder entries ("…please ignore") start hidden; you can unhide them.
 const isPlaceholder = a => /please ignore|this is a test/i.test(a.base ? a.base.title : a.title);
 const tasks = all => all.filter(a => a.kind === "assignment" || (a.kind === "reading" && a.due));
 
@@ -327,6 +346,8 @@ async function gmailSend(token, m) {
    5. DATES & HELPERS
    ========================================================================= */
 const pad = n => String(n).padStart(2, "0");
+// "⌘" on Apple devices, "Ctrl+" everywhere else.
+const KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
 function isoDay(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 const parseD = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const dueAt = a => { if (!a.due) return null; const d = parseD(a.due); if (a.time) { const [h, m] = a.time.split(":").map(Number); d.setHours(h, m); } else d.setHours(23, 59); return d; };
@@ -511,7 +532,7 @@ function renderMine(all) {
   const withWork = vis.filter(a => a.work.length).sort((x, y) => Math.max(...y.work.map(w => w.added || 0)) - Math.max(...x.work.map(w => w.added || 0)));
   const sec = (t, list, fn, hint) => list.length ? `<section class="group"><div class="ghead"><h2>${t}</h2><span class="n">${list.length}</span>${hint ? `<span class="hint">${hint}</span>` : ""}</div><div class="mgrid">${list.map(fn).join("")}</div></section>` : "";
   const html =
-    sec("Hub updates to review", vis.filter(a => a.conflicts.length), a => mineCard(a, conflictHTML(a)), "He changed something you'd also changed") +
+    sec("Hub updates to review", vis.filter(a => a.conflicts.length), a => mineCard(a, conflictHTML(a)), "The hub changed something you'd also changed") +
     sec("In progress", vis.filter(a => (a.inProgress || a.steps.length) && !a.done).sort(byDue), a => mineCard(a, stepsSummary(a)), "What you've started") +
     sec("Your submissions", withWork, a => mineCard(a, `<div class="wlist">${workList(a, false)}</div>`), "Links to the work you handed in") +
     sec("Results", vis.filter(a => a.grade), a => mineCard(a, `<div class="gradebox"><b>${esc(a.grade.score)}<small> / ${esc(a.grade.outOf)}</small></b>${gradePct(a.grade) != null ? `<span>${gradePct(a.grade)}%</span>` : ""}</div>${a.grade.feedback ? `<div class="note full">${esc(a.grade.feedback)}</div>` : ""}`), "Marks and feedback you've recorded") +
@@ -519,7 +540,7 @@ function renderMine(all) {
     sec("Your notes", vis.filter(a => a.note), a => mineCard(a, `<div class="note full">${esc(a.note)}</div>`)) +
     sec("Your changes", vis.filter(a => a.edited), a => mineCard(a, `<div class="diff">${Object.keys(FIELD_LABEL).filter(k => (a.base[k] ?? null) !== (a[k] ?? null)).map(k => `<div><span>${FIELD_LABEL[k]}</span><s>${esc(showVal(k, a.base[k]))}</s><b>${esc(showVal(k, a[k]))}</b></div>`).join("")}</div>`), "Hub version crossed out, yours in bold") +
     sec("Added by you", vis.filter(a => a.custom), a => mineCard(a, "")) +
-    sec("No longer on the hub", vis.filter(a => a.removed), a => mineCard(a, `<p class="hint">Your friend removed this. Your ticks, notes and links are kept.</p>`));
+    sec("No longer on the hub", vis.filter(a => a.removed), a => mineCard(a, `<p class="hint">This was removed from the hub. Your ticks, notes and links are kept.</p>`));
   return toolbar(all, false) + (html || `<div class="empty"><b>Nothing here yet</b>Open any assignment and use “Add link” to save your Google Doc, Drive file or YouTube video. Your notes, edits and sent emails show up here too.</div>`);
 }
 function stepsSummary(a) {
@@ -528,9 +549,9 @@ function stepsSummary(a) {
   return `<div class="stepbar"><div class="pbar"><i style="width:${d / a.steps.length * 100}%"></i></div><span>${d}/${a.steps.length}</span></div>${next ? `<p class="hint">Next: ${esc(next.t)}</p>` : `<p class="hint">All steps done. Tick it off when submitted.</p>`}`;
 }
 function conflictHTML(a) {
-  return `<div class="conflictbox"><span><b>Your friend updated this after you changed it.</b> Your version is still showing.</span>
-    ${a.conflicts.map(c => `<div class="ch"><span>${FIELD_LABEL[c.k]}</span><span>His new value: <b>${esc(showVal(c.k, c.now))}</b> <s>${esc(showVal(c.k, c.was))}</s><br>Yours: ${esc(showVal(c.k, c.mine))}</span></div>`).join("")}
-    <div class="btnrow"><button type="button" class="btn" data-conflict="theirs" data-id="${esc(a.id)}">Use his version</button><button type="button" class="btn ghost" data-conflict="mine" data-id="${esc(a.id)}">Keep mine</button></div></div>`;
+  return `<div class="conflictbox"><span><b>The hub updated this after you changed it.</b> Your version is still showing.</span>
+    ${a.conflicts.map(c => `<div class="ch"><span>${FIELD_LABEL[c.k]}</span><span>Hub now says: <b>${esc(showVal(c.k, c.now))}</b> <s>${esc(showVal(c.k, c.was))}</s><br>Yours: ${esc(showVal(c.k, c.mine))}</span></div>`).join("")}
+    <div class="btnrow"><button type="button" class="btn" data-conflict="theirs" data-id="${esc(a.id)}">Use the hub version</button><button type="button" class="btn ghost" data-conflict="mine" data-id="${esc(a.id)}">Keep mine</button></div></div>`;
 }
 function sentHTML(a) {
   return `<div class="sentlog">${a.sent.slice().reverse().map(m => `<div>${ICON.send}<span>${m.via === "gmail" ? "Sent" : "Drafted"} to ${esc(m.to)} · ${new Date(m.at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>`).join("")}</div>`;
@@ -568,7 +589,7 @@ function downloadICS() {
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
   const escI = v => String(v || "").replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/[,;]/g, m => "\\" + m);
   const fold = l => l.match(/.{1,73}/g).join("\r\n ");
-  const ev = tasks(items()).filter(a => a.due && !a.hidden && !a.done).map(a => {
+  const ev = tasks(scoped()).filter(a => a.due && !a.hidden && !a.done).map(a => {
     const d = a.due.replace(/-/g, ""), s = subjOf(a.sid);
     const when = a.time
       ? [`DTSTART:${d}T${a.time.replace(":", "")}00`, `DTEND:${d}T${a.time.replace(":", "")}00`]
@@ -623,10 +644,28 @@ function renderAcct(msg) {
   const u = fb.user, ini = (u.displayName || u.email || "?").trim()[0].toUpperCase();
   el.innerHTML = `${u.photoURL ? `<img src="${esc(u.photoURL)}" alt="" referrerpolicy="no-referrer">` : `<span class="av">${esc(ini)}</span>`}<span class="who"><b>${esc(u.displayName || "Signed in")}</b><small>${esc(u.email || "")}</small></span>`;
 }
+function renderSemPicker() {
+  const list = semesters(), el = $("#semwrap");
+  if (list.length < 2) { el.innerHTML = ""; return; }
+  const cur = currentSem(), act = activeSem();
+  el.innerHTML = `<label class="semsel"><span class="sr">Semester</span><select id="semsel" aria-label="Semester">${list.map(x => `<option value="${x.id}"${x.id === act ? " selected" : ""}>${esc(x.name)}${x.id === cur ? " (current)" : ""}</option>`).join("")}</select></label>`;
+}
+document.addEventListener("change", e => {
+  if (e.target.id !== "semsel") return;
+  semPick = Number(e.target.value) === currentSem() ? null : Number(e.target.value);
+  try { semPick ? sessionStorage.setItem("mc-sem", semPick) : sessionStorage.removeItem("mc-sem"); } catch (err) {}
+  if (view === "subject") view = "subjects";
+  filter = "all"; render();
+});
 function renderBanner() {
   const b = $("#banner");
+  if (activeSem() !== currentSem()) {
+    const name = (semesters().find(x => x.id === activeSem()) || {}).name || "a past semester";
+    b.innerHTML = `<div class="banner"><p><b>You're looking at ${esc(name)}.</b> Everything you saved for it is still here.</p><div class="btnrow"><button type="button" class="btn" data-semnow>Back to the current semester</button></div></div>`;
+    return;
+  }
   if (fbReady && fb && !fb.user && !S.flags.signinDismissed) {
-    b.innerHTML = `<div class="banner"><p><b>Sign in to sync across your devices.</b> Your ticks, links and notes will follow you from your MacBook to your phone, and you can email submissions straight from Gmail.</p><div class="btnrow"><button type="button" class="gbtn" data-signin>${ICON.google}Sign in with Google</button><button type="button" class="btn ghost" data-dismiss="signin">Later</button></div></div>`;
+    b.innerHTML = `<div class="banner"><p><b>Sign in to sync across your devices.</b> Your ticks, notes and links are saved to your Google account and stay in sync on every device you use, and you can email submissions straight from Gmail.</p><div class="btnrow"><button type="button" class="gbtn" data-signin>${ICON.google}Sign in with Google</button><button type="button" class="btn ghost" data-dismiss="signin">Later</button></div></div>`;
     return;
   }
   b.innerHTML = "";
@@ -636,8 +675,8 @@ function greeting() { const h = new Date().getHours(); return h < 12 ? "Good mor
 function render() {
   if (!HUB) return;
   if (view === "subject" && !SUBJ.find(s => s.id === openSubj)) view = "subjects";
-  const all = items();
-  renderNav(all); renderBanner();
+  const all = scoped();
+  renderNav(all); renderBanner(); renderSemPicker();
   const t = tasks(all).filter(a => !a.hidden), open = t.filter(a => !a.done), late = open.filter(isPast).length;
   const week = open.filter(a => a.due && !isPast(a) && dayDiff(a) <= 7).length;
   const dateStr = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
@@ -680,11 +719,11 @@ function resolveConflict(id, which) {
   }
   if (!FIELDS.some(k => k in e) && !e.note) delete S.edits[id];
   persist(); render(); if (editing && editing.id === id) openSheet(id, true);
-  toast(which === "theirs" ? "Updated to his version" : "Kept your version");
+  toast(which === "theirs" ? "Updated to the hub version" : "Kept your version");
 }
 document.addEventListener("click", e => {
   if (e.target.closest(".sheet")) return;
-  const t = e.target.closest("[data-toggle],[data-open],[data-add],[data-go],[data-subj],[data-filter],[data-tab],[data-mod],[data-setup],[data-showhidden],[data-jump],[data-signin],[data-dismiss],[data-settings],[data-refreshhub],[data-conflict],[data-day],[data-cal],[data-ics],a");
+  const t = e.target.closest("[data-toggle],[data-open],[data-add],[data-go],[data-subj],[data-filter],[data-tab],[data-mod],[data-setup],[data-showhidden],[data-jump],[data-signin],[data-dismiss],[data-settings],[data-refreshhub],[data-conflict],[data-day],[data-cal],[data-ics],[data-semnow],a");
   if (!t || t.tagName === "A") return;
   const row = t.closest("[data-id]"), id = row && row.dataset.id;
   if (t.hasAttribute("data-toggle")) toggle(id);
@@ -692,6 +731,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.day) { calSel = t.dataset.day; const d = parseD(calSel); if (d.getMonth() !== calMonth.getMonth()) calMonth = new Date(d.getFullYear(), d.getMonth(), 1); render(); }
   else if (t.dataset.cal) { const n = Number(t.dataset.cal); calMonth = n ? new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1); if (!n) calSel = isoDay(new Date()); render(); }
   else if (t.hasAttribute("data-ics")) downloadICS();
+  else if (t.hasAttribute("data-semnow")) { semPick = null; try { sessionStorage.removeItem("mc-sem"); } catch (err) {} if (view === "subject") view = "subjects"; render(); }
   else if (t.hasAttribute("data-open")) openSheet(t.dataset.id || id);
   else if (t.hasAttribute("data-add")) openSheet(null);
   else if (t.hasAttribute("data-signin")) signIn();
@@ -763,7 +803,7 @@ function sheetView(a) {
   return `<h2 class="bigt">${esc(a.title)}</h2>
     <div class="status"><span style="font-weight:600">${esc(s.short)}</span>${a.sid !== "general" ? `<span>· Module ${a.module || 1}</span>` : ""}${a.kind !== "note" ? `<span>·</span><span class="due ${u}">${esc(dueText(a))}${a.due && !a.done && !isPast(a) ? " · " + countdown(a) : ""}</span>` : ""}</div>
     ${a.conflicts.length ? conflictHTML(a) : ""}
-    ${a.removed ? `<div class="orig"><span><b>Removed from the hub.</b> Your friend deleted this item. Everything you saved on it is kept here.</span></div>` : ""}
+    ${a.removed ? `<div class="orig"><span><b>Removed from the hub.</b> This item is no longer on the hub. Everything you saved on it is kept here.</span></div>` : ""}
     <div class="actions">
       ${a.kind !== "note" ? `<button type="button" class="btn${a.done ? " on" : ""}" data-sheet="done">${svg('<path d="M5 12l5 5L20 7"/>', 3)}${doneLabel}</button>` : ""}
       ${a.link ? `<a class="btn" href="${esc(a.link)}" target="_blank" rel="noopener">${ICON.open}Open ${a.kind === "assignment" ? "assignment" : "file"}</a>` : ""}
@@ -908,7 +948,7 @@ $("#form").addEventListener("submit", e => {
     Object.assign(c, { sid: f("subj").value, kind: f("kind").value, note }); toast("Saved");
   } else {
     // Only fields that differ from the hub are stored, plus the hub value at the time,
-    // so a later change on his side can be spotted instead of silently overwritten.
+    // so a later change on the hub can be spotted instead of silently overwritten.
     const b = editing.base, prev = S.edits[editing.id] || {}, ed = { _from: {} };
     for (const k of FIELDS) if ((v[k] ?? null) !== (b[k] ?? null)) { ed[k] = v[k]; ed._from[k] = prev._from && k in prev._from && prev[k] === v[k] ? prev._from[k] : b[k] ?? null; }
     if (note) ed.note = note;
@@ -1044,7 +1084,7 @@ $("#composer").addEventListener("input", e => {
 c("regen").onclick = () => { const a = items().find(x => x.id === mailFor); c("body").value = mailText(a, c("tname").value.trim()); bodyDirty = false; refreshPreview(); };
 c("copy").onclick = () => {
   const m = currentMail(), txt = `Subject: ${m.subject}\n\n${m.text}`;
-  const fallback = () => { setCTab("edit"); c("body").select(); toast("Selected. Press ⌘C to copy"); };
+  const fallback = () => { setCTab("edit"); c("body").select(); toast(`Selected. Press ${KEY}C to copy`); };
   try { navigator.clipboard.writeText(txt).then(() => toast("Email copied"), fallback); } catch (err) { fallback(); }
 };
 function rememberTeacher(a) {
@@ -1072,7 +1112,7 @@ c("gmail").addEventListener("click", e => {
     }
   } catch (err) { rich = false; }
   link.href = gmailComposeURL(rich ? { ...m, text: "" } : m);
-  toast(rich ? "Email copied. In Gmail, click in the message and press ⌘V." : "Draft opened in Gmail.", sent, "I sent it", 15000);
+  toast(rich ? `Email copied. In Gmail, click in the message and press ${KEY}V.` : "Draft opened in Gmail.", sent, "I sent it", 15000);
 });
 c("send").onclick = () => {
   const m = currentMail();
@@ -1108,7 +1148,7 @@ function openSettings() {
   $("#s-account").innerHTML = `<h3>Account</h3>` + (!fbReady ? `<p class="hint">Cloud sync isn't set up. Fill in <b>config.js</b> with your Firebase settings to sign in.</p>`
     : u ? `<div class="kv"><span>Signed in as</span><b>${esc(u.email)}</b><span>Saving</span><span>${esc($("#syncst").textContent)}</span><span>Gmail</span><span>${gtok && gtok.exp > Date.now() ? "Allowed for this session" : "Asks permission the first time you send"}</span></div><div class="btnrow"><button type="button" class="btn ghost danger" id="s-signout">Sign out</button></div>`
     : `<p class="hint">Sign in to sync across devices and send emails from Gmail.</p><button type="button" class="gbtn" data-signin2>${ICON.google}Sign in with Google</button>`);
-  $("#s-hub").innerHTML = `<h3>Your friend's hub</h3><div class="kv"><span>Source</span><code>${esc(hubState.source || "—")}</code><span>Last checked</span><span>${hubState.at ? esc(ago(hubState.at)) : "never"}${hubState.cached ? " (offline copy)" : ""}</span><span>Items</span><span>${BASE.length} from the hub · ${S.custom.length} added by you</span></div><div class="btnrow"><button type="button" class="btn" id="s-refresh">${ICON.refresh}Check for updates now</button></div>`;
+  $("#s-hub").innerHTML = `<h3>Assignment Hub</h3><div class="kv"><span>Source</span><code>${esc(hubState.source || "—")}</code><span>Last checked</span><span>${hubState.at ? esc(ago(hubState.at)) : "never"}${hubState.cached ? " (offline copy)" : ""}</span><span>Items</span><span>${BASE.length} from the hub · ${S.custom.length} added by you</span></div><div class="btnrow"><button type="button" class="btn" id="s-refresh">${ICON.refresh}Check for updates now</button></div>`;
   showPanel($("#settings"), p("name"));
 }
 $("#settings").addEventListener("click", e => {
@@ -1117,7 +1157,7 @@ $("#settings").addEventListener("click", e => {
   else if (e.target.closest("#s-refresh")) refreshHub(true);
   else if (e.target.closest("#s-export")) {
     const txt = JSON.stringify(S);
-    const fallback = () => { $("#s-import").value = txt; $("#s-import").select(); toast("Selected. Press ⌘C to copy"); };
+    const fallback = () => { $("#s-import").value = txt; $("#s-import").select(); toast(`Selected. Press ${KEY}C to copy`); };
     try { navigator.clipboard.writeText(txt).then(() => toast("Your data is copied"), fallback); } catch (err) { fallback(); }
   }
   else if (e.target.closest("#s-doimport")) {
@@ -1155,7 +1195,7 @@ function applyHub(hub, announce) {
   HUB = hub; buildFromHub(hub);
   const { changed, relinked } = reconcile();
   if (changed) persist();
-  if (!anyPanelOpen()) render(); else renderNav(items());
+  if (!anyPanelOpen()) render(); else renderNav(scoped());
   const added = BASE.filter(b => before.size && !before.has(b.id) && !S.seen.includes(b.id)).length;
   const differs = prevJSON !== JSON.stringify(hub);
   if (announce && added) toast(`${added} new item${added > 1 ? "s" : ""} from the hub`);

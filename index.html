@@ -31,6 +31,7 @@
     <div class="top">
       <div><h1 id="headline">Your coursework</h1><p class="sub" id="subline"></p></div>
       <div class="topacts">
+        <span id="semwrap"></span>
         <button class="icon big" type="button" data-settings aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
         <button class="btn primary" type="button" data-add><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add assignment</button>
       </div>
@@ -91,7 +92,7 @@
     <label class="checkrow"><input type="checkbox" id="c-markdone" checked><span>Mark the assignment as done after sending</span></label>
   </form>
   <div class="sf">
-    <div><button class="btn ghost" type="button" id="c-copy">Copy text</button><a class="btn" id="c-gmail" href="#" target="_blank" rel="noopener" title="Copies the formatted email and opens a Gmail draft. Paste with ⌘V.">Copy &amp; open Gmail</a></div>
+    <div><button class="btn ghost" type="button" id="c-copy">Copy text</button><a class="btn" id="c-gmail" href="#" target="_blank" rel="noopener" title="Copies the formatted email and opens a Gmail draft, ready to paste.">Copy &amp; open Gmail</a></div>
     <div><button class="btn primary" type="button" id="c-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/></svg>Send from my Gmail</button></div>
   </div>
 </aside>
@@ -114,7 +115,7 @@
     <section class="setgroup"><h3>Teachers</h3><p class="hint">Filled in for you when you email a submission.</p><div id="s-teachers" class="stack"></div></section>
     <section class="setgroup" id="s-hub"></section>
     <section class="setgroup">
-      <h3>Your data</h3><p class="hint">Move data in from the Claude version, or keep a backup.</p>
+      <h3>Your data</h3><p class="hint">Keep a backup, or bring in data you copied from another account.</p>
       <div class="field"><label for="s-import">Paste data to import</label><textarea id="s-import" rows="4" placeholder='{"done":{…},"work":{…}}'></textarea></div>
       <div class="btnrow"><button type="button" class="btn" id="s-doimport">Import and merge</button><button type="button" class="btn ghost" id="s-export">Copy my data</button></div>
     </section>

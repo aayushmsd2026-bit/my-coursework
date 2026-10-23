@@ -56,7 +56,7 @@ export function readConst(src, name) {
 export function parseHub(src) {
   const SUBJECTS = readConst(src, "SUBJECTS");
   if (!Array.isArray(SUBJECTS) || !SUBJECTS.length) throw new Error("No SUBJECTS found in the hub");
-  return { SUBJECTS, GENERAL: readConst(src, "GENERAL") || [], MODULE_COUNT: readConst(src, "MODULE_COUNT") || 5 };
+  return { SUBJECTS, GENERAL: readConst(src, "GENERAL") || [], MODULE_COUNT: readConst(src, "MODULE_COUNT") || 5, SEMESTERS: readConst(src, "SEMESTERS") || [] };
 }
 
 export const FIELDS = ["title", "due", "time", "link", "email", "module"];

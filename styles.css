@@ -500,3 +500,9 @@ body{margin:0;min-height:100vh}
   .cday .dots{display:flex;justify-content:center}
   .calhead h2{font-size:19px}
 }
+
+/* Semester picker */
+.semsel{display:inline-flex;align-items:center}
+.semsel .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.semsel select{appearance:none;-webkit-appearance:none;border:1px solid var(--line);background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B73' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='M7 10l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 12px center/14px;border-radius:9999px;padding:10px 34px 10px 16px;font-size:14px;font-weight:500;color:var(--ink);box-shadow:var(--shadow-1);cursor:pointer;max-width:220px}
+.semsel select:focus-visible{outline:3px solid color-mix(in srgb,var(--ring-blue) 70%,transparent);outline-offset:2px}
