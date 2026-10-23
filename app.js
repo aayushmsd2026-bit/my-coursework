@@ -8,6 +8,8 @@
 // flagged so you can choose. If he renames an id or deletes an item, your data is re-linked
 // by subject + title, or kept as "removed from the hub" — it is never thrown away.
 
+import { parseHub, hubItems, FIELDS, strip } from "./hub-core.js";
+
 const CONFIG = window.COURSEWORK_CONFIG || {};
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -41,64 +43,6 @@ const ICON = {
    1. HUB — fetch your friend's data.js live and parse it without running it
    ========================================================================= */
 
-// data.js is JavaScript, not JSON. Running someone else's code inside your signed-in page
-// would give it access to your account, so it's parsed as plain data instead.
-function parseLiteral(src, start) {
-  let i = start;
-  const fail = () => { throw new SyntaxError("Unexpected token at " + i); };
-  const ws = () => {
-    for (;;) {
-      while (i < src.length && /\s/.test(src[i])) i++;
-      if (src.startsWith("//", i)) { const n = src.indexOf("\n", i); i = n < 0 ? src.length : n; }
-      else if (src.startsWith("/*", i)) { const n = src.indexOf("*/", i + 2); i = n < 0 ? src.length : n + 2; }
-      else return;
-    }
-  };
-  const ident = () => { const m = /^[A-Za-z_$][\w$]*/.exec(src.slice(i, i + 200)); if (!m) fail(); i += m[0].length; return m[0]; };
-  const str = () => {
-    const q = src[i++]; let s = "";
-    while (src[i] !== q) {
-      if (i >= src.length) fail();
-      if (src[i] === "\\") {
-        const n = src[i + 1]; i += 2;
-        if (n === "u") { s += String.fromCharCode(parseInt(src.substr(i, 4), 16)); i += 4; }
-        else if (n === "\n") { /* line continuation */ }
-        else s += { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f", v: "\v", 0: "\0" }[n] ?? n;
-      } else s += src[i++];
-    }
-    i++; return s;
-  };
-  const val = () => {
-    ws(); const c = src[i];
-    if (c === "[") { i++; const a = []; for (;;) { ws(); if (src[i] === "]") { i++; return a; } a.push(val()); ws(); if (src[i] === ",") i++; else if (src[i] !== "]") fail(); } }
-    if (c === "{") {
-      i++; const o = {};
-      for (;;) {
-        ws(); if (src[i] === "}") { i++; return o; }
-        const k = src[i] === '"' || src[i] === "'" ? str() : /\d/.test(src[i]) ? String(val()) : ident();
-        ws(); if (src[i++] !== ":") fail();
-        o[k] = val(); ws();
-        if (src[i] === ",") i++; else if (src[i] !== "}") fail();
-      }
-    }
-    if (c === '"' || c === "'" || c === "`") return str();
-    const m = /^[-+]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?/.exec(src.slice(i, i + 40));
-    if (m) { i += m[0].length; return Number(m[0]); }
-    const id = ident();
-    if (id === "true") return true; if (id === "false") return false; if (id === "null" || id === "undefined") return null;
-    fail();
-  };
-  return val();
-}
-function readConst(src, name) {
-  const m = new RegExp(`(?:const|let|var)\\s+${name}\\s*=\\s*`).exec(src);
-  return m ? parseLiteral(src, m.index + m[0].length) : undefined;
-}
-function parseHub(src) {
-  const SUBJECTS = readConst(src, "SUBJECTS");
-  if (!Array.isArray(SUBJECTS) || !SUBJECTS.length) throw new Error("No SUBJECTS found in the hub");
-  return { SUBJECTS, GENERAL: readConst(src, "GENERAL") || [], MODULE_COUNT: readConst(src, "MODULE_COUNT") || 5 };
-}
 const HUB_URLS = CONFIG.hubUrls || ["https://neotahiro.github.io/assignment-hub/data.js"];
 const HUB_CACHE = "mc-hub-cache";
 let HUB = null, hubState = { source: "", at: 0, error: "" };
@@ -124,8 +68,6 @@ async function cachedHub() {
 }
 
 // ---------- Hub → items ----------
-const FIELDS = ["title", "due", "time", "link", "email", "module"];
-const strip = a => { const o = {}; for (const k of FIELDS) if (a[k] != null && a[k] !== "") o[k] = a[k]; return o; };
 const norm = t => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const fingerprint = a => a.sid + "|" + a.kind + "|" + norm(a.title);
 let SUBJ = [], BASE = [], BASE_BY_ID = new Map();
@@ -139,16 +81,7 @@ function buildFromHub(hub) {
     return { id: s.id, code: m ? m[1] : "", short: m ? m[2] : s.name, name: s.name, color: `var(--s${palette[s.id]})`, modules: s.modules || hub.MODULE_COUNT || 5 };
   });
   SUBJ.push({ id: "general", code: "", short: "General", name: "General", color: "var(--s0)", modules: 1 });
-  // His ids are hand-typed, so duplicates happen ("gen-a1" twice). The second copy becomes "gen-a1~2".
-  const seen = {};
-  const uid = id => { id = String(id || "item"); seen[id] = (seen[id] || 0) + 1; return seen[id] === 1 ? id : `${id}~${seen[id]}`; };
-  BASE = [];
-  hub.SUBJECTS.forEach(s => {
-    (s.assignments || []).forEach(a => BASE.push({ ...strip(a), id: uid(a.id), sid: s.id, kind: "assignment" }));
-    (s.readings || []).forEach(a => BASE.push({ ...strip(a), id: uid(a.id), sid: s.id, kind: "reading" }));
-    (s.notes || []).forEach(a => BASE.push({ ...strip(a), id: uid(a.id), sid: s.id, kind: "note" }));
-  });
-  (hub.GENERAL || []).forEach(a => BASE.push({ ...strip(a), id: uid(a.id), sid: "general", kind: "assignment", module: 1 }));
+  BASE = hubItems(hub);
   BASE_BY_ID = new Map(BASE.map(b => [b.id, b]));
 }
 const subjOf = id => SUBJ.find(s => s.id === id) || { id, code: "", short: "Removed subject", name: "Removed subject", color: "var(--s0)", modules: 5 };
@@ -156,7 +89,9 @@ const subjOf = id => SUBJ.find(s => s.id === id) || { id, code: "", short: "Remo
 /* =========================================================================
    2. YOURS — your layer, keyed by item id
    ========================================================================= */
-const EMPTY = () => ({ v: 2, done: {}, edits: {}, custom: [], hidden: {}, star: {}, seen: [], flags: {}, work: {}, sent: {}, snap: {}, colors: {}, profile: {}, teachers: {} });
+const EMPTY = () => ({ v: 2, done: {}, edits: {}, custom: [], hidden: {}, star: {}, seen: [], flags: {}, work: {}, sent: {}, snap: {}, colors: {}, profile: {}, teachers: {}, reminders: {}, account: {} });
+// Reminder defaults; the daily job (scripts/remind.mjs) uses the same ones.
+const REMINDER_DEFAULTS = { enabled: true, days: 3, overdue: true, readings: false };
 const MAPS = ["done", "edits", "hidden", "star", "work", "sent"];
 const load = o => { const s = { ...EMPTY(), ...(o || {}) }; for (const k of Object.keys(EMPTY())) if (s[k] == null) s[k] = EMPTY()[k]; delete s.flags.importDismissed; return s; };
 const LOCAL = "mc-state";
@@ -309,6 +244,7 @@ function onUser(u) {
       cloudRef = ref;
       S = cloud ? (localDirty ? mergeState(load(cloud), S) : load(cloud)) : S;
       if (!S.profile.name && u.displayName) S.profile.name = u.displayName;
+      S.account = { email: u.email || "", name: u.displayName || "" }; // lets the reminder job know where to write
       lastWritten = cloud ? JSON.stringify(cloud) : "";
       localDirty = false;
       if (HUB) { buildFromHub(HUB); reconcile(); }
@@ -1009,6 +945,10 @@ function openSettings() {
   $("#s-account").innerHTML = `<h3>Account</h3>` + (!fbReady ? `<p class="hint">Cloud sync isn't set up. Fill in <b>config.js</b> with your Firebase settings to sign in.</p>`
     : u ? `<div class="kv"><span>Signed in as</span><b>${esc(u.email)}</b><span>Saving</span><span>${esc($("#syncst").textContent)}</span><span>Gmail</span><span>${gtok && gtok.exp > Date.now() ? "Allowed for this session" : "Asks permission the first time you send"}</span></div><div class="btnrow"><button type="button" class="btn ghost danger" id="s-signout">Sign out</button></div>`
     : `<p class="hint">Sign in to sync across devices and send emails from Gmail.</p><button type="button" class="gbtn" data-signin2>${ICON.google}Sign in with Google</button>`);
+  const R = { ...REMINDER_DEFAULTS, ...S.reminders };
+  $("#r-on").checked = R.enabled; $("#r-to").value = R.to || (u && u.email) || ""; $("#r-days").value = String(R.days);
+  $("#r-overdue").checked = R.overdue; $("#r-readings").checked = R.readings;
+  showReminderStatus();
   $("#s-hub").innerHTML = `<h3>Your friend's hub</h3><div class="kv"><span>Source</span><code>${esc(hubState.source || "—")}</code><span>Last checked</span><span>${hubState.at ? esc(ago(hubState.at)) : "never"}${hubState.cached ? " (offline copy)" : ""}</span><span>Items</span><span>${BASE.length} from the hub · ${S.custom.length} added by you</span></div><div class="btnrow"><button type="button" class="btn" id="s-refresh">${ICON.refresh}Check for updates now</button></div>`;
   showPanel($("#settings"), p("name"));
 }
@@ -1032,8 +972,22 @@ $("#settings").addEventListener("click", e => {
     S = mergeState(S, incoming); reconcile(); persist(); $("#s-import").value = ""; toast("Imported and merged with your data"); render();
   }
 });
+// The daily job writes reminderLog/<uid> after each email, so you can see it's working.
+function showReminderStatus() {
+  const el = $("#r-status");
+  if (!fb || !fb.user) { el.textContent = "Sign in to get reminders. They're sent from your account by a daily job on GitHub."; return; }
+  el.textContent = "Checking…";
+  fb.F.getDoc(fb.F.doc(fb.db, "reminderLog", fb.user.uid)).then(d => {
+    const L = d.exists() ? d.data() : null;
+    const when = t => new Date(t).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    el.textContent = !L ? "No reminder sent yet. If it stays like this after tomorrow morning, finish the reminder setup in the README."
+      : [L.sentAt ? `Last email: ${when(L.sentAt)} · ${L.sentCount} item${L.sentCount === 1 ? "" : "s"} · to ${L.to}` : "",
+         L.checkedAt && L.checkedAt !== L.sentAt ? `Last checked ${when(L.checkedAt)}: nothing was due, so no email was sent.` : ""].filter(Boolean).join(" ");
+  }, () => { el.textContent = ""; });
+}
 $("#sform").addEventListener("submit", e => {
   e.preventDefault();
+  S.reminders = { enabled: $("#r-on").checked, to: $("#r-to").value.trim(), days: Number($("#r-days").value), overdue: $("#r-overdue").checked, readings: $("#r-readings").checked };
   S.profile = { ...S.profile, name: p("name").value.trim(), studentId: p("id").value.trim(), program: p("program").value.trim(), institution: p("inst").value.trim(), phone: p("phone").value.trim() };
   document.querySelectorAll("#s-teachers .trow").forEach(r => {
     const t = {}; r.querySelectorAll("input").forEach(i => { if (i.value.trim()) t[i.dataset.k] = i.value.trim(); });

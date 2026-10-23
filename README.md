@@ -54,6 +54,26 @@ Without this step, everything else works and **Open in Gmail** still opens a pre
 
 On iPhone: open the site in Safari → Share → **Add to Home Screen** for an app-like icon.
 
+## Daily reminders (optional)
+
+Every morning around 6:40 AM Nepal time, a GitHub job (`.github/workflows/reminders.yml`) reads the live hub
+plus your own progress and emails you what's overdue, due today, due tomorrow, or coming up in the next few days.
+It skips anything you've ticked, hidden, or moved, and it sends nothing on days with nothing due.
+Turn it on, off, or change how early it starts in **Settings → Email reminders**.
+
+It needs three secrets in the repository (**Settings → Secrets and variables → Actions → New repository secret**):
+
+| Name | Value |
+|---|---|
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase → ⚙️ Project settings → **Service accounts** → **Generate new private key**. Open the downloaded `.json` file in TextEdit and paste **all** of it. Keep this file private and delete it afterwards. |
+| `GMAIL_USER` | The Gmail address the reminders are sent **from** (yours is fine). |
+| `GMAIL_APP_PASSWORD` | A Gmail **app password**: <https://myaccount.google.com/apppasswords> (needs 2-Step Verification turned on). Paste the 16 letters. |
+
+Then publish the updated `firestore.rules` (it lets the site show when the last reminder went out).
+
+To test: **Actions → Daily reminders → Run workflow**. Leave *force* ticked to send one right away.
+GitHub pauses scheduled jobs in repositories with no activity for 60 days; if it emails you about that, click **Enable workflow**.
+
 ## Files
 
 - `index.html`, `styles.css` — layout and design (KU palette, Apple-style surfaces)
@@ -61,3 +81,5 @@ On iPhone: open the site in Safari → Share → **Add to Home Screen** for an a
 - `config.js` — your Firebase keys and the hub address (the only file you need to edit)
 - `firestore.rules` — security rules: only you can read or write your data
 - `hub-fallback.json` — offline copy used if the hub can't be reached on first load
+- `hub-core.js` — reads the hub; shared by the site and the reminder job
+- `scripts/remind.mjs`, `.github/workflows/reminders.yml` — the daily reminder email

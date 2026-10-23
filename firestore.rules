@@ -5,6 +5,11 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+    // Written by the daily reminder job; you can read your own to see when it last ran.
+    match /reminderLog/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
     // Everything else is closed.
     match /{document=**} {
       allow read, write: if false;

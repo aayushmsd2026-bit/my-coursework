@@ -109,6 +109,17 @@
       <div class="field"><label for="p-inst">Institution</label><input id="p-inst" type="text" placeholder="Kathmandu University School of Education"></div>
       <div class="field"><label for="p-phone">Phone <span class="opt">optional</span></label><input id="p-phone" type="tel"></div>
     </section>
+    <section class="setgroup" id="s-remind">
+      <h3>Email reminders</h3><p class="hint">One short email each morning, around 6:40 AM Nepal time, listing what's still pending. Nothing is sent on days with nothing due.</p>
+      <label class="checkrow"><input type="checkbox" id="r-on"><span>Email me a daily reminder</span></label>
+      <div class="row2">
+        <div class="field"><label for="r-to">Send to</label><input id="r-to" type="email" placeholder="you@gmail.com"></div>
+        <div class="field"><label for="r-days">Start reminding me</label><select id="r-days"><option value="1">1 day before</option><option value="2">2 days before</option><option value="3">3 days before</option><option value="5">5 days before</option><option value="7">7 days before</option></select></div>
+      </div>
+      <label class="checkrow"><input type="checkbox" id="r-overdue"><span>Include overdue assignments</span></label>
+      <label class="checkrow"><input type="checkbox" id="r-readings"><span>Include readings that have a due date</span></label>
+      <p class="hint" id="r-status"></p>
+    </section>
     <section class="setgroup"><h3>Teachers</h3><p class="hint">Filled in for you when you email a submission.</p><div id="s-teachers" class="stack"></div></section>
     <section class="setgroup" id="s-hub"></section>
     <section class="setgroup">

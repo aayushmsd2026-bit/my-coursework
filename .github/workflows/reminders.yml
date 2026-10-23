@@ -1,0 +1,36 @@
+name: Daily reminders
+
+on:
+  schedule:
+    - cron: "52 0 * * *"   # 00:52 UTC = 6:37 AM in Nepal. GitHub can start a few minutes late.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (show what would be sent, send nothing)"
+        type: boolean
+        default: false
+      force:
+        description: "Send even if today's reminder already went out"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save firebase-admin@12.7.0 nodemailer@6.9.16
+      - run: node scripts/remind.mjs
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
